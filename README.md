@@ -1,1 +1,129 @@
-# mobile-noraebang
+# norae. — 나만의 작은 노래방
+
+설치 없이 사용하는 한국어 반응형 웹 노래방입니다. 제목·가수로 TJ·금영 공식 반주를 먼저 검색하고, 공식 반주가 없으면 다른 채널의 MR 후보를 보여줍니다.
+
+## 실행
+
+Node.js 22.12 이상이 필요합니다.
+
+```sh
+npm ci
+cp .env.example .env
+npm run dev
+```
+
+`http://localhost:3000`에서 열 수 있습니다. 다른 포트는 `.env`의 `PORT`로 지정합니다. 개인 기기에서만 접속하려면 `HOST=127.0.0.1`로 설정하세요. 기본값은 원격 개발 환경을 지원하는 `0.0.0.0`입니다. 외부에 배포할 경우 HTTPS와 개인용 접근 제어를 호스팅 환경에서 설정해야 합니다.
+
+### YouTube 검색 설정
+
+1. Google Cloud 프로젝트에서 **YouTube Data API v3**를 활성화하고 API 키를 만듭니다.
+2. `.env`의 `YOUTUBE_API_KEY=`에 키를 입력하고 서버를 재시작합니다.
+3. API 키의 API 제한을 YouTube Data API v3로 지정합니다. 고정 서버 IP가 있다면 IP 제한도 설정하세요.
+
+키는 서버에서만 사용합니다. `VITE_` 접두사를 붙이거나 클라이언트 코드에 넣지 마세요. `.env`는 Git에서 제외됩니다. 공개 데이터 검색이므로 사용자 Google 로그인·OAuth 설정은 필요하지 않습니다.
+
+**키가 없어도 `YouTube 링크` 탭에서 영상 URL로 재생할 수 있습니다.** 검색은 설정 안내를 표시하며, 가짜 결과나 비공식 스크래핑으로 대체하지 않습니다.
+
+## Vercel 배포
+
+Vercel은 Vite 화면과 `api/config.ts`, `api/search.ts`를 같은 HTTPS 주소에서 제공합니다. API 함수는 공통 Express 앱을 사용하지만 `listen()`으로 서버를 띄우거나 Vite 개발 서버를 실행하지 않습니다. 기존 `npm run dev`, `npm start` 방식도 유지됩니다. 별도 데이터베이스는 필요하지 않습니다.
+
+### GitHub에서 가져오기
+
+1. 이 변경이 포함된 브랜치를 GitHub에 푸시한 다음, Vercel의 **Add New → Project → Import Git Repository**에서 `allenkim0129/mobile-noraebang`을 선택합니다.
+2. 배포 대상이 **이 코드가 포함된 브랜치**인지 확인하세요. 현재 작업 브랜치는 `allenkim0129-curly-memory`이며, 아직 `main`에 병합되지 않았다면 `main`을 배포해서는 새 앱이 나타나지 않습니다. 기존 프로젝트에서는 배포할 Git 브랜치/참조를 이 브랜치로 지정하거나 먼저 변경을 `main`에 병합해야 합니다.
+3. **Framework Preset**은 **Vite**, **Root Directory**는 저장소 루트입니다. `vercel.json`이 `npm ci`, `npm run build`, `dist` 출력 및 API 함수 설정을 제공합니다. `npm start`를 Vercel 빌드 명령으로 사용하지 마세요.
+4. 프로젝트의 **Settings → Environment Variables**에 아래 값을 추가합니다.
+
+   | 항목 | 값 |
+   | --- | --- |
+   | Name | `YOUTUBE_API_KEY` |
+   | Value | Google Cloud에서 만든 실제 API 키 |
+   | Environments | `Production`, `Preview` |
+
+5. **Deploy**합니다. 이미 배포한 뒤 환경 변수를 추가·수정했다면 **Redeploy**해야 적용됩니다. 로컬·클라우드 작업 폴더의 `.env`는 Vercel 설정에 자동 반영되지 않습니다.
+
+키는 Vercel UI에서만 입력하고 채팅이나 Git에 올리지 마세요. `VITE_YOUTUBE_API_KEY`처럼 이름을 바꾸면 안 됩니다. `.env`는 `.gitignore`와 `.vercelignore` 모두에서 제외되며, 프론트엔드는 `/api/config`에서 설정 여부만 받습니다.
+
+Google Cloud의 키 **API restrictions**는 **YouTube Data API v3**로 제한하세요. 검색은 브라우저가 아닌 Vercel 서버에서 호출하므로 **Websites** 제한은 맞지 않습니다. 일반적인 서버리스 배포는 고정 출발 IP를 보장하지 않으므로, 별도 고정 IP 구성을 사용하지 않는 한 **Application restrictions**의 IP 제한을 임의로 설정하면 검색이 실패할 수 있습니다.
+
+### 배포 후 모바일 확인
+
+- Vercel이 실제로 발급한 `https://…vercel.app` 주소를 Safari에서 엽니다. 로그인 보호된 Preview 배포라면 Vercel 접근 권한이 필요합니다.
+- 같은 주소의 `/api/config`가 `{"searchConfigured":true,"hosting":"vercel"}`을 반환하는지 확인합니다. 이 응답에는 키가 포함되지 않습니다.
+- YouTube 연결 안내에 동의하고 제목·가수 검색, TJ/금영 필터, 다른 MR 검색을 확인합니다. 키가 잘못됐거나 API가 비활성화돼도 설정 여부는 `true`일 수 있으므로 실제 검색도 확인해야 합니다.
+- YouTube 영상 재생, 가로·세로 화면, 전체화면, 예약곡 전환을 실제 기기에서 확인합니다. iOS가 자동재생을 차단하면 영상 안의 재생 버튼을 눌러야 합니다.
+
+### 무료 플랜·접근 범위
+
+개인·비상업적 이용은 Vercel Hobby의 대상이지만 무료 한도와 제공 조건은 가입 시 [공식 플랜 안내](https://vercel.com/docs/plans/hobby)를 확인하세요. 무료 체험을 위해 유료 기능이나 데이터베이스를 추가할 필요는 없습니다. 영상은 YouTube에서 사용자 기기로 직접 전달됩니다.
+
+Vercel의 캐시·IP별 요청 제한은 **함수 인스턴스 메모리 기준의 보조 장치**입니다. 재시작·다중 인스턴스에 걸쳐 공유되는 전역 제한은 아니며, 별도 영구 DB나 Redis는 사용하지 않습니다. Google의 YouTube API 할당량은 여전히 프로젝트 전체에 적용됩니다.
+
+배포 URL이 생긴다고 자동으로 개인 전용이 되는 것은 아닙니다. Production URL의 공개 여부와 **Deployment Protection**을 확인하고, 개인용이라면 해당 플랜에서 지원하는 접근 제한 범위를 적용하세요. Preview는 설정에 따라 Vercel 로그인이 요구될 수 있습니다.
+
+### CLI를 사용하는 경우
+
+본인의 터미널에서 Vercel CLI로 로그인·프로젝트 연결·배포를 진행할 수도 있습니다. 대화에 토큰을 전달할 필요는 없습니다.
+
+```sh
+npx vercel login
+npx vercel link
+npx vercel env add YOUTUBE_API_KEY production
+npx vercel env add YOUTUBE_API_KEY preview
+npx vercel deploy
+```
+
+`vercel env add`의 입력 프롬프트에 실제 키를 넣습니다. `vercel deploy`는 Preview 배포이며, Production 배포가 필요할 때만 `npx vercel deploy --prod`를 사용하세요. Vercel 계정 인증과 프로젝트 접근 권한 없이는 실제 배포 또는 발급 URL 확인을 완료할 수 없습니다.
+
+## Mac·아이폰에서 로컬 테스트
+
+이 클라우드 작업 환경의 `localhost:3000`은 사용자 Mac의 주소가 아닙니다. 지원되는 포트 포워딩 URL이 별도로 제공되지 않는 한 클라우드의 개발 서버를 그 주소로 열 수 없습니다.
+
+이 코드가 포함된 브랜치가 GitHub에 올라간 뒤, Mac에서 다음처럼 실행할 수 있습니다.
+
+```sh
+git clone --branch allenkim0129-curly-memory https://github.com/allenkim0129/mobile-noraebang.git
+cd mobile-noraebang
+npm ci
+cp .env.example .env
+npm run dev
+```
+
+Mac의 브라우저에서는 `http://localhost:3000`으로 접속합니다. 같은 Wi-Fi의 아이폰에서는 **Mac의 Wi-Fi IP 주소**를 사용한 `http://<Mac의-IP>:3000`으로 접속합니다. 기본 `HOST=0.0.0.0`이 필요하며 macOS 방화벽에서 연결을 허용해야 할 수 있습니다. 카페 등 공용 네트워크에서는 사용하지 마세요. 키 없이 링크 재생부터 확인할 수 있고 검색에는 **Mac의 `.env`**에 키를 넣고 서버를 재시작해야 합니다. 다른 기기에 키를 따로 입력할 필요는 없습니다.
+
+Vercel의 HTTPS 배포 주소가 생기면 같은 Wi-Fi나 Mac 실행 없이 휴대폰에서 테스트할 수 있습니다.
+
+## 기능
+
+- 제목·가수 검색. 공식 채널 전체/TJ/금영 필터.
+- TJ 공식 채널 ID `UCZUhx8ClCv6paFW7qi3qljg`와 금영 공식 핸들 `@karaokeky`로 검색 범위 확인. 금영 핸들은 YouTube API로 채널 ID를 확인한 후 사용하며, 표시 이름으로 공식 여부를 판단하지 않습니다.
+- 공식 결과가 없으면 다른 MR 자동 검색. 공식 결과가 있으면 `다른 채널의 MR 검색`으로 추가 검색.
+- 공식 YouTube 플레이어로 영상·반주·영상에 포함된 가사 재생. 광고와 원본 컨트롤을 유지합니다.
+- 예약곡 추가·취소·비우기, 다음 곡 이동, 곡 종료 시 다음 예약곡 재생.
+- 모바일 가로·세로 화면 지원. 자동재생이 차단되면 영상의 재생 버튼을 눌러야 합니다. 전체화면은 브라우저 지원 범위에서 제공됩니다.
+- 임베드 차단·삭제 영상·네트워크 오류·검색 할당량 소진 안내.
+
+**녹음, 음원 추출·다운로드, 자체 가사 수집, 키 조절은 포함하지 않습니다.** 마이크와 카메라 권한도 사용하지 않습니다. 예약곡은 탭 메모리에만 유지되어 새로고침하면 삭제됩니다.
+
+## 할당량·데이터·이용 범위
+
+- 최초 검색은 공식 채널 검색 2회와 금영 채널 ID 확인 1회를 사용합니다. 채널 ID는 서버 메모리에 24시간 보관합니다. 다른 MR 검색은 검색 호출 1회를 추가 사용합니다.
+- 검색 결과는 서버 메모리에 5분 동안 최대 200개 검색 조건까지 보관합니다. 동일 조건의 진행 중 요청을 합치며, 추가 MR 검색 시 유효한 공식 검색 결과를 재사용합니다.
+- 검색 버튼으로만 요청하며 입력할 때마다 API를 호출하지 않습니다. 서버 인스턴스 내 IP별 분당 20회 요청 제한이 있습니다. Vercel에서는 플랫폼의 전달 IP를 사용하며 로컬 서버에서는 전달 헤더를 신뢰하지 않습니다. API 할당량은 프로젝트 전체에 적용되며, 한 번의 앱 검색과 한 번의 API 호출은 다릅니다.
+- 기본 할당량과 증액 조건은 [공식 문서](https://developers.google.com/youtube/data/guides/quota_and_compliance_audits)를 확인하세요. 여러 API 키로 할당량을 우회하지 않습니다.
+- 검색어는 서버와 Google에 전달됩니다. IP와 요청 횟수는 요청 제한을 위해 서버 메모리에서 최대 1분 처리합니다. 별도 검색 기록 DB나 분석 도구는 없습니다. 호스팅 제공자의 접속 로그는 별도 정책을 따릅니다.
+- YouTube 연결 동의 여부만 브라우저 저장소에 보관하며, 앱의 `이용·개인정보 안내`에서 철회할 수 있습니다. YouTube 플레이어는 Google 정책에 따라 자체적으로 정보를 처리할 수 있습니다.
+- 개인의 비상업적 연습용 프로토타입입니다. 이 설명이 콘텐츠 이용허락을 대신하지 않습니다. 공개 서비스·수익화 전에는 [YouTube 개발자 정책](https://developers.google.com/youtube/terms/developer-policies), 콘텐츠 권리 및 배포 환경의 개인정보 처리를 검토해야 합니다.
+
+## 검증·프로덕션 실행
+
+```sh
+npm test
+npm run build
+npm start
+```
+
+React·TypeScript·Vite 클라이언트와 Express API 서버를 사용합니다. 프로덕션 서버는 `dist/`와 `/api/*`를 같은 출처에서 제공합니다. 서버 런타임에 필요한 `tsx`는 일반 의존성에 포함됩니다.
+
+테스트는 모의 YouTube 응답으로 공식 채널 우선 검색, 대체 MR, 캐시·동시 요청, 오류, URL 검증 및 API 경계를 확인합니다. 실제 검색은 유효한 API 키와 Google 연결이 필요하며, 실제 임베드 재생 가능 여부는 영상·지역·브라우저 설정에 따라 달라집니다.
