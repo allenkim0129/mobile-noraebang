@@ -65,6 +65,21 @@ h1 > span { color: #c3adff; }
 .search-form input:focus-visible { outline: none; }
 .search-submit { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 7px; background: #bea5ff; color: #282031; flex-shrink: 0; }
 .search-submit:hover { background: #cdb9ff; }
+.search-input-group { position: relative; }
+.autocomplete-panel { position: absolute; z-index: 10; top: calc(100% + 7px); left: 0; right: 0; background: #24202d; border: 1px solid #aa90cd55; border-radius: 11px; box-shadow: 0 15px 35px #0007; overflow: hidden; }
+.autocomplete-heading { display: flex; justify-content: space-between; gap: 8px; padding: 12px 13px 9px; font-size: 11px; color: #d3bfe9; }
+.autocomplete-heading > span { font-size: 9px; color: #9c8cab; }
+.autocomplete-panel ul { margin: 0; padding: 0 5px; list-style: none; max-height: min(310px, 42dvh); overflow-y: auto; overscroll-behavior: contain; }
+.autocomplete-option { display: flex; align-items: center; gap: 10px; padding: 10px 8px; min-height: 53px; border-radius: 7px; cursor: pointer; }
+.autocomplete-option:hover, .autocomplete-option.active { background: #b7a1ff18; }
+.autocomplete-icon { flex-shrink: 0; color: #a68ebd; display: flex; }
+.autocomplete-label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.autocomplete-label strong { font-size: 12px; font-weight: 500; color: #e0d6ed; overflow-wrap: anywhere; line-height: 1.6; }
+.autocomplete-label > span { font-size: 10px; color: #a092af; line-height: 1.5; }
+.autocomplete-arrow { flex-shrink: 0; color: #92829f; }
+.correction-badge { flex-shrink: 0; font-size: 9px; color: #dfc5a0; border: 1px solid #dfc5a02e; border-radius: 5px; padding: 3px 5px; }
+.autocomplete-empty { font-size: 11px; color: #b1a2c2; padding: 14px; margin: 0; line-height: 1.8; }
+.autocomplete-footer { padding: 10px 12px; font-size: 9px; color: #9584a4; line-height: 1.8; border-top: 1px solid #ffffff0a; }
 .search-hint { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: #878493; font-size: 10px; line-height: 1.6; }
 .search-hint svg { color: #a38cb8; }
 .consent-notice { display: flex; gap: 9px; align-items: flex-start; background: #201d2b; border: 1px solid #ac8cf22e; border-radius: 11px; padding: 14px; margin-top: 14px; }

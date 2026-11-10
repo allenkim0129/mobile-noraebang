@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowDown, ArrowRight, AudioLines, Check, ChevronRight, CircleHelp,
   ExternalLink, Headphones, Link, ListMusic, LoaderCircle, Maximize2,
   MicVocal, Music2, Play, Plus, Search, ShieldCheck, SkipForward, Sparkles, X,
 } from 'lucide-react';
 import Player from './Player.js';
+import SearchForm from './SearchForm.js';
 import { appendToQueue, displayTitle, songFromUrl } from './lib/songs.js';
+import { rememberSearch } from './lib/suggestions.js';
 import type { ApiError, AppConfig, Provider, SearchResults, Song } from './types.js';
 
 const suggestions = ['아이유 밤편지', 'DAY6 한 페이지가 될 수 있게', '윤하 사건의 지평선'];
@@ -46,6 +48,7 @@ export default function App() {
   const [mode, setMode] = useState<'search' | 'link'>('search');
   const [filter, setFilter] = useState<'all' | 'tj' | 'ky'>('all');
   const [lastQuery, setLastQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [results, setResults] = useState<SearchResults | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
@@ -146,7 +149,9 @@ export default function App() {
         throw new Error(body.error || '검색하지 못했어요. 잠시 후 다시 시도해 주세요.');
       }
       const data: SearchResults = await response.json();
+      if (controller.signal.aborted) return;
       setResults(data);
+      setRecentSearches((previous) => rememberSearch(previous, normalized));
     } catch (error) {
       if (controller.signal.aborted) return;
       setSearchError(error instanceof Error ? error.message : '검색 중 문제가 생겼어요.');
@@ -176,14 +181,13 @@ export default function App() {
     else setNotice('마지막 곡이에요. 다음에 부를 곡을 예약해 보세요.');
   }
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
+  function submit(value: string) {
     if (mode === 'search') {
-      void searchSongs(query);
+      void searchSongs(value);
       return;
     }
     if (!canConnect()) return;
-    const song = songFromUrl(link);
+    const song = songFromUrl(value);
     if (!song) {
       setSearchError('올바른 YouTube 영상 링크를 입력해 주세요. 재생목록 링크만으로는 재생할 수 없어요.');
       return;
@@ -239,17 +243,9 @@ export default function App() {
                 <button className={mode === 'search' ? 'active' : ''} onClick={() => { setMode('search'); setSearchError(''); }}><Search size={16} /> 노래 검색</button>
                 <button className={mode === 'link' ? 'active' : ''} onClick={() => { setMode('link'); setSearchError(''); }}><Link size={16} /> YouTube 링크</button>
               </div>
-              <form className="search-form" onSubmit={submit}>
-                <label className="sr-only" htmlFor="song-search">{mode === 'search' ? '곡 제목 또는 가수' : 'YouTube 영상 링크'}</label>
-                <Search size={21} className="search-field-icon" />
-                <input ref={searchInput} id="song-search" value={mode === 'search' ? query : link}
-                  onChange={(event) => mode === 'search' ? setQuery(event.target.value) : setLink(event.target.value)}
-                  placeholder={mode === 'search' ? '곡 제목이나 가수를 검색해 보세요' : 'YouTube 영상 링크를 붙여 넣으세요'}
-                  maxLength={mode === 'search' ? 100 : 2048} autoComplete="off" enterKeyHint={mode === 'search' ? 'search' : 'go'} />
-                <button className="search-submit" type="submit" disabled={searching} aria-label={mode === 'search' ? '검색' : '링크 재생'}>
-                  {searching ? <LoaderCircle className="spin" size={20} /> : <ArrowRight size={21} />}
-                </button>
-              </form>
+              <SearchForm mode={mode} value={mode === 'search' ? query : link} inputRef={searchInput}
+                searching={searching} recentSearches={recentSearches}
+                onChange={mode === 'search' ? setQuery : setLink} onSubmit={submit} />
               <div className="search-hint"><ShieldCheck size={14} />{mode === 'search' ? 'TJ · 금영 공식 채널의 반주를 먼저 찾아드려요' : '검색 API 키 없이도 영상 링크로 바로 재생할 수 있어요'}</div>
             </div>
 
@@ -338,7 +334,8 @@ export default function App() {
         <p>norae.는 개인의 비상업적 노래 연습을 위한 웹 노래방 프로토타입입니다. 녹음, 반주 다운로드, 키 조절 기능은 제공하지 않습니다.</p>
         <h3>YouTube 연결</h3><p>YouTube API Services로 검색하고 공식 플레이어로 영상을 재생합니다. 사용 시 <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer">YouTube 서비스 약관</a>에 동의하게 됩니다. Google의 데이터 처리는 <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google 개인정보처리방침</a>을 따릅니다.</p>
         <h3>처리하는 정보</h3><p>검색어는 검색 서버와 Google에 전달됩니다. 서버는 검색 결과를 최대 5분 동안 메모리에 보관하며, 요청 제한을 위해 IP 주소와 요청 횟수를 최대 1분 동안 메모리에서 처리합니다. 별도 검색 기록 DB나 분석 도구는 사용하지 않습니다. 호스팅 업체의 접속 로그 정책은 배포 환경에 따라 달라집니다.</p>
-        <p>영상 재생 시 YouTube가 IP 주소, 기기 정보 및 쿠키 등을 처리할 수 있습니다. 예약 목록은 이 탭의 메모리에만 유지되고 새로고침하면 삭제됩니다. 기기 저장소에는 연결 동의 여부만 저장합니다. 마이크와 카메라는 사용하지 않습니다.</p>
+        <p>입력 중 자동 추천은 준비된 곡·가수 목록과 이 탭의 최근 검색어로 기기에서 처리하며, 추천을 선택하거나 검색을 실행하기 전에는 검색어를 서버로 보내지 않습니다. 최근 검색어와 예약 목록은 이 탭의 메모리에만 유지되고 새로고침하면 삭제됩니다.</p>
+        <p>영상 재생 시 YouTube가 IP 주소, 기기 정보 및 쿠키 등을 처리할 수 있습니다. 기기 저장소에는 연결 동의 여부만 저장합니다. 마이크와 카메라는 사용하지 않습니다.</p>
         <h3>제한 사항</h3><p>영상 가용성, 광고, 재생 제한은 YouTube와 권리자의 설정을 따릅니다. 개인용이라는 표기가 별도 이용허락을 대신하지 않으며, 공개 서비스나 수익화 전에는 정책·권리 범위를 다시 검토해야 합니다.</p>
         {consent && <button className="outline-button" onClick={() => {
           request.current?.abort();
@@ -346,6 +343,7 @@ export default function App() {
           setCurrent(null);
           setQueue([]);
           setResults(null);
+          setRecentSearches([]);
           setConsent(false);
           try { localStorage.removeItem('norae-consent-v1'); }
           catch { setStorageWarning('저장된 동의 설정을 지우지 못했어요. 브라우저 사이트 데이터를 직접 삭제해 주세요.'); }
