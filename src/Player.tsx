@@ -3,6 +3,7 @@ import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react';
 import type { Song } from './types.js';
 
 interface YouTubePlayer {
+  playVideo(): void;
   destroy(): void;
 }
 
@@ -15,7 +16,7 @@ interface PlayerOptions {
     onStateChange(event: { data: number }): void;
     onError(event: { data: number }): void;
     onAutoplayBlocked(): void;
-    onReady(): void;
+    onReady(event: { target: YouTubePlayer }): void;
   };
 }
 
@@ -87,8 +88,16 @@ export default function Player({ song, onEnded }: { song: Song; onEnded(): void 
         height: '100%',
         playerVars: { playsinline: 1, autoplay: 1, rel: 0, origin: window.location.origin },
         events: {
-          onReady: () => { if (!disposed) setReady(true); },
-          onStateChange: ({ data }) => { if (!disposed && data === 0) ended.current(); },
+          onReady: ({ target: readyPlayer }) => {
+            if (disposed) return;
+            setReady(true);
+            readyPlayer.playVideo();
+          },
+          onStateChange: ({ data }) => {
+            if (disposed) return;
+            if (data === 1) setAutoplayBlocked(false);
+            if (data === 0) ended.current();
+          },
           onError: ({ data }) => { if (!disposed) setError(playerError(data)); },
           onAutoplayBlocked: () => { if (!disposed) setAutoplayBlocked(true); },
         },

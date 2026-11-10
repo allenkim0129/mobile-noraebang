@@ -49,10 +49,10 @@ test('validates queries before spending quota', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('searches verified official channel IDs first with embeddable-video restrictions', async () => {
+test('shows KY before TJ with verified official IDs and embeddable-video restrictions', async () => {
   const { calls, fetcher } = fixture();
   const result = await createYouTubeService({ apiKey: 'test-key', fetcher }).search(' 아이유   밤편지 ');
-  assert.deepEqual(result.official.map((song) => song.provider), ['tj', 'ky']);
+  assert.deepEqual(result.official.map((song) => song.provider), ['ky', 'tj']);
   assert.deepEqual(result.alternatives, []);
   assert.equal(result.alternativesLoaded, false);
   assert.equal(calls.length, 3);
@@ -73,12 +73,28 @@ test('reuses official search cache when explicitly loading other MR candidates',
   const result = await service.search('아이유', true);
   assert.equal(calls.length, 4);
   assert.equal(result.alternativesLoaded, true);
+  assert.deepEqual(result.official.map((song) => song.provider), ['ky', 'tj']);
   assert.equal(result.alternatives[0].provider, 'other');
   assert.equal(calls.at(-1)?.searchParams.get('q'), '아이유 노래방 MR');
   await service.search('아이유', true);
   assert.equal(calls.length, 4);
 });
 
+test('keeps provider relevance order within KY-first groups and falls back to TJ when KY has no results', async () => {
+  for (const hasKy of [true, false]) {
+    const { fetcher } = fixture((url) => {
+      if (url.pathname.endsWith('/channels')) return Response.json({ items: [{ id: kyId }] });
+      return Response.json({ items: url.searchParams.get('channelId') === kyId
+        ? hasKy ? [video('lmnopqrstuv', kyId), video('vwxyz123456', kyId)] : []
+        : [video('abcdefghijk'), video('01234567890')] });
+    });
+    const result = await createYouTubeService({ apiKey: 'test-key', fetcher }).search('곡');
+    assert.deepEqual(result.official.map((song) => song.id), [
+      ...(hasKy ? ['lmnopqrstuv', 'vwxyz123456'] : []), 'abcdefghijk', '01234567890',
+    ]);
+    assert.equal(result.alternativesLoaded, false);
+  }
+});
 test('automatically searches other channels when official results are empty', async () => {
   const { calls, fetcher } = fixture((url) => {
     if (url.pathname.endsWith('/channels')) return Response.json({ items: [{ id: kyId }] });
