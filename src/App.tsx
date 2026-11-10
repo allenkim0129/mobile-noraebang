@@ -106,6 +106,14 @@ export default function App() {
     else dialog?.close();
   }, [privacyOpen]);
 
+  useEffect(() => {
+    if (!current) return;
+    stage.current?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    });
+  }, [current, playbackSequence]);
+
   function acceptConsent() {
     setConsent(true);
     try {
@@ -165,9 +173,6 @@ export default function App() {
     setCurrent(song);
     setPlaybackSequence((value) => value + 1);
     setQueue((items) => items.filter((item) => item.id !== song.id));
-    if (window.matchMedia('(max-width: 899px)').matches) {
-      stage.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
   }
 
   function addToQueue(song: Song) {
@@ -210,6 +215,7 @@ export default function App() {
 
   const official = results?.official.filter((song) => filter === 'all' || song.provider === filter) ?? [];
   const queueIds = new Set(queue.map((song) => song.id));
+  const nextSong = queue[0];
 
   return (
     <div className="app-shell">
@@ -236,7 +242,23 @@ export default function App() {
           </div>
         </section>
 
-        <div className="workspace">
+        <div className={`workspace ${current ? 'is-playing' : ''}`}>
+          <section className="stage-card" ref={stage} aria-label="노래 재생">
+            <div className="panel-heading"><span className="eyebrow"><span className={`live-dot ${current ? '' : 'muted'}`} /> NOW PLAYING</span><button className="icon-button" aria-label="플레이어 크게 보기" title="크게 보기" disabled={!current} onClick={() => void fullscreen()}><Maximize2 size={16} /></button></div>
+            <div className="next-up">
+              <span className="next-up-label"><SkipForward size={14} /> 다음 곡</span>
+              <div className="next-up-song" role="status" aria-label="다음 예약곡" aria-live="polite" aria-atomic="true">{nextSong
+                ? <><ProviderBadge provider={nextSong.provider} /><strong title={displayTitle(nextSong.title)}>{displayTitle(nextSong.title)}</strong></>
+                : <span>예약곡이 없어요</span>}</div>
+              <button className="next-button" onClick={playNext} disabled={!queue.length} aria-label="다음 예약곡 재생" title="다음 예약곡"><SkipForward size={20} /></button>
+            </div>
+            {current ? <Player key={`${current.id}:${playbackSequence}`} song={current} onEnded={playNext} /> : <div className="empty-stage"><div className="stage-rings"><MicVocal size={33} strokeWidth={1.5} /></div><strong>무대가 준비됐어요</strong><p>노래를 선택하면 여기에 재생돼요</p><div className="equalizer" aria-hidden="true">{Array.from({ length: 19 }, (_, i) => <span key={i} style={{ height: `${8 + ((i * 13 + 7) % 25)}px` }} />)}</div></div>}
+            <div className="now-playing-info">
+              <div><span className="track-caption">{current ? '지금 부르는 곡' : '오늘의 주인공은 당신'}</span><h2>{current ? displayTitle(current.title) : '첫 소절을 시작해 볼까요?'}</h2><p>{current ? current.channelTitle : '좋아하는 노래 한 곡이면 충분해요.'}</p></div>
+            </div>
+            <div className="stage-footnote"><Music2 size={13} />가사와 반주는 YouTube 원본 영상으로 제공돼요</div>
+          </section>
+
           <section className="discovery" aria-label="노래 검색">
             <div className="search-card">
               <div className="search-tabs" aria-label="검색 방식">
@@ -246,7 +268,7 @@ export default function App() {
               <SearchForm mode={mode} value={mode === 'search' ? query : link} inputRef={searchInput}
                 searching={searching} recentSearches={recentSearches}
                 onChange={mode === 'search' ? setQuery : setLink} onSubmit={submit} />
-              <div className="search-hint"><ShieldCheck size={14} />{mode === 'search' ? 'TJ · 금영 공식 채널의 반주를 먼저 찾아드려요' : '검색 API 키 없이도 영상 링크로 바로 재생할 수 있어요'}</div>
+              <div className="search-hint"><ShieldCheck size={14} />{mode === 'search' ? '금영 반주를 먼저, TJ와 다른 MR도 찾아드려요' : '검색 API 키 없이도 영상 링크로 바로 재생할 수 있어요'}</div>
             </div>
 
             {consentReady && !consent && (
@@ -276,19 +298,19 @@ export default function App() {
                   <button className="outline-button" onClick={() => searchInput.current?.focus()}>첫 곡 찾으러 가기 <ArrowRight size={15} /></button>
                 </div>
                 <div className="feature-strip">
-                  <div><span className="feature-icon purple"><ShieldCheck size={20} /></span><strong>공식 반주 우선</strong><p>TJ · 금영을 먼저</p></div>
+                  <div><span className="feature-icon purple"><ShieldCheck size={20} /></span><strong>금영 반주 우선</strong><p>금영 → TJ 순서로</p></div>
                   <div><span className="feature-icon peach"><ListMusic size={20} /></span><strong>끊기지 않는 무드</strong><p>예약곡 자동 이어 부르기</p></div>
                   <div><span className="feature-icon green"><Headphones size={20} /></span><strong>어디서든 가볍게</strong><p>설치 없는 웹 노래방</p></div>
                 </div>
               </>
             )}
 
-            {searching && !results && <div className="search-loading" role="status"><LoaderCircle size={28} className="spin" /><h3>부르고 싶은 곡을 찾고 있어요</h3><p>TJ · 금영 공식 채널을 확인하는 중이에요.</p></div>}
+            {searching && !results && <div className="search-loading" role="status"><LoaderCircle size={28} className="spin" /><h3>부르고 싶은 곡을 찾고 있어요</h3><p>금영 · TJ 공식 채널을 확인하는 중이에요.</p></div>}
             {results && (
               <div className="search-results" aria-busy={searching}>
                 <div className="section-heading result-heading"><h2>‘{lastQuery}’ 검색 결과</h2><span>YouTube 검색</span></div>
                 <div className="result-filters" aria-label="공식 채널 필터">
-                  {(['all', 'tj', 'ky'] as const).map((value) => <button key={value} aria-pressed={filter === value} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{value === 'all' ? '공식 채널 전체' : providerName[value]}</button>)}
+                  {(['all', 'ky', 'tj'] as const).map((value) => <button key={value} aria-pressed={filter === value} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{value === 'all' ? '공식 채널 전체' : providerName[value]}</button>)}
                 </div>
                 <div className="list-heading"><ShieldCheck size={15} /><h3>공식 노래방 반주</h3><span>{official.length}곡</span></div>
                 {official.length ? official.map((song) => <SongRow key={song.id} song={song} playing={current?.id === song.id} queued={queueIds.has(song.id)} onPlay={() => playSong(song)} onQueue={() => addToQueue(song)} />)
@@ -306,16 +328,6 @@ export default function App() {
           </section>
 
           <aside className="stage-column">
-            <section className="stage-card" ref={stage} aria-label="노래 재생">
-              <div className="panel-heading"><span className="eyebrow"><span className={`live-dot ${current ? '' : 'muted'}`} /> NOW PLAYING</span><button className="icon-button" aria-label="플레이어 크게 보기" title="크게 보기" onClick={() => void fullscreen()}><Maximize2 size={16} /></button></div>
-              {current ? <Player key={`${current.id}:${playbackSequence}`} song={current} onEnded={playNext} /> : <div className="empty-stage"><div className="stage-rings"><MicVocal size={33} strokeWidth={1.5} /></div><strong>무대가 준비됐어요</strong><p>노래를 선택하면 여기에 재생돼요</p><div className="equalizer" aria-hidden="true">{Array.from({ length: 19 }, (_, i) => <span key={i} style={{ height: `${8 + ((i * 13 + 7) % 25)}px` }} />)}</div></div>}
-              <div className="now-playing-info">
-                <div><span className="track-caption">{current ? '지금 부르는 곡' : '오늘의 주인공은 당신'}</span><h2>{current ? displayTitle(current.title) : '첫 소절을 시작해 볼까요?'}</h2><p>{current ? current.channelTitle : '좋아하는 노래 한 곡이면 충분해요.'}</p></div>
-                <button className="next-button" onClick={playNext} disabled={!queue.length} aria-label="다음 예약곡 재생" title="다음 예약곡"><SkipForward size={20} /></button>
-              </div>
-              <div className="stage-footnote"><Music2 size={13} />가사와 반주는 YouTube 원본 영상으로 제공돼요</div>
-            </section>
-
             <section className="queue-card" id="queue" aria-label="예약곡">
               <div className="queue-heading"><h2><ListMusic size={18} /> 다음에 부를 노래 <span>{queue.length}</span></h2>{queue.length > 0 && <button className="text-button" onClick={() => { setQueue([]); setNotice('예약 목록을 비웠어요.'); }}>비우기</button>}</div>
               {queue.length === 0 ? <div className="empty-queue"><ListMusic size={28} strokeWidth={1.4} /><p>아직 예약한 곡이 없어요</p><span>검색 결과의 + 버튼으로 담아보세요</span></div>

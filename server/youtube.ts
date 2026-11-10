@@ -143,11 +143,11 @@ export function createYouTubeService({
       if (previous && previous.expiresAt > now()) {
         official = previous.value.official;
       } else {
-        const [tj, ky] = await Promise.all([
-          searchVideos(normalized, kyId, TJ_CHANNEL_ID),
+        const [ky, tj] = await Promise.all([
           searchVideos(normalized, kyId, kyId),
+          searchVideos(normalized, kyId, TJ_CHANNEL_ID),
         ]);
-        official = [...new Map([...tj, ...ky].map((song) => [song.id, song])).values()];
+        official = [...new Map([...ky, ...tj].map((song) => [song.id, song])).values()];
       }
       const alternativesLoaded = includeAlternatives || official.length === 0;
       const otherResults = alternativesLoaded ? await searchVideos(normalized, kyId) : [];

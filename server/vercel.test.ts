@@ -60,7 +60,7 @@ test('Vercel function exports handle full API paths and keep runtime credentials
   const body = await search.text();
   assert.ok(!body.includes('test-only-vercel-secret'));
   const result = JSON.parse(body);
-  assert.deepEqual(result.official.map((song: { provider: string }) => song.provider), ['tj', 'ky']);
+  assert.deepEqual(result.official.map((song: { provider: string }) => song.provider), ['ky', 'tj']);
   assert.equal(upstreamRequests.length, 3);
   assert.equal((await fetch(`${base}/api/search?q=`)).status, 400);
 });
