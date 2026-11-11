@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react';
 import type { Song } from './types.js';
 
 interface YouTubePlayer {
   playVideo(): void;
+  loadVideoById(options: { videoId: string; startSeconds: number }): void;
   destroy(): void;
+}
+
+export interface PlayerHandle {
+  play(song: Song): void;
 }
 
 interface PlayerOptions {
@@ -63,13 +68,27 @@ function playerError(code: number) {
   return '이 영상을 재생하지 못했어요. 다시 시도하거나 다른 반주를 골라 주세요.';
 }
 
-export default function Player({ song, onEnded }: { song: Song; onEnded(): void }) {
+export default function Player({ song, onEnded, ref }: { song: Song; onEnded(): void; ref: Ref<PlayerHandle> }) {
   const host = useRef<HTMLDivElement>(null);
   const ended = useRef(onEnded);
+  const selected = useRef(song);
+  const instance = useRef<YouTubePlayer | null>(null);
+  const instanceReady = useRef(false);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [retry, setRetry] = useState(0);
+
+  useImperativeHandle(ref, () => ({
+    play(nextSong) {
+      selected.current = nextSong;
+      setError('');
+      setAutoplayBlocked(false);
+      if (instanceReady.current && instance.current) {
+        instance.current.loadVideoById({ videoId: nextSong.id, startSeconds: 0 });
+      }
+    },
+  }), []);
 
   useEffect(() => { ended.current = onEnded; }, [onEnded]);
   useEffect(() => {
@@ -82,16 +101,20 @@ export default function Player({ song, onEnded }: { song: Song; onEnded(): void 
       if (disposed || !host.current || !window.YT) return;
       const target = document.createElement('div');
       host.current.replaceChildren(target);
+      const initialVideoId = selected.current.id;
       player = new window.YT.Player(target, {
-        videoId: song.id,
+        videoId: initialVideoId,
         width: '100%',
         height: '100%',
-        playerVars: { playsinline: 1, autoplay: 1, rel: 0, origin: window.location.origin },
+        playerVars: { playsinline: 1, autoplay: 0, rel: 0, origin: window.location.origin },
         events: {
           onReady: ({ target: readyPlayer }) => {
             if (disposed) return;
+            instance.current = readyPlayer;
+            instanceReady.current = true;
             setReady(true);
-            readyPlayer.playVideo();
+            if (selected.current.id === initialVideoId) readyPlayer.playVideo();
+            else readyPlayer.loadVideoById({ videoId: selected.current.id, startSeconds: 0 });
           },
           onStateChange: ({ data }) => {
             if (disposed) return;
@@ -102,14 +125,17 @@ export default function Player({ song, onEnded }: { song: Song; onEnded(): void 
           onAutoplayBlocked: () => { if (!disposed) setAutoplayBlocked(true); },
         },
       });
+      instance.current = player;
     }).catch((cause: unknown) => {
       if (!disposed) setError(cause instanceof Error ? cause.message : '플레이어를 불러오지 못했어요.');
     });
     return () => {
       disposed = true;
+      instanceReady.current = false;
+      instance.current = null;
       player?.destroy();
     };
-  }, [song.id, retry]);
+  }, [retry]);
 
   return (
     <>
@@ -117,7 +143,7 @@ export default function Player({ song, onEnded }: { song: Song; onEnded(): void 
         {!ready && !error && <div className="player-loading" role="status"><LoaderCircle className="spin" /> YouTube 연결 중</div>}
         <div ref={host} className="youtube-host" />
       </div>
-      {autoplayBlocked && !error && <p className="player-note">영상 안의 재생 버튼을 눌러 시작해 주세요.</p>}
+      {autoplayBlocked && !error && <p className="player-note">브라우저가 재생 시작을 차단했어요. 영상 안의 ▶ 버튼을 직접 눌러 주세요. iPhone Safari에서는 첫 재생에 직접 터치가 필요할 수 있어요.</p>}
       {error && (
         <div className="player-error" role="alert">
           <p>{error}</p>

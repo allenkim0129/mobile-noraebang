@@ -4,7 +4,7 @@ import {
   ExternalLink, Headphones, Link, ListMusic, LoaderCircle, Maximize2,
   MicVocal, Music2, Play, Plus, Search, ShieldCheck, SkipForward, Sparkles, X,
 } from 'lucide-react';
-import Player from './Player.js';
+import Player, { type PlayerHandle } from './Player.js';
 import SearchForm from './SearchForm.js';
 import { appendToQueue, displayTitle, songFromUrl } from './lib/songs.js';
 import { rememberSearch } from './lib/suggestions.js';
@@ -66,6 +66,7 @@ export default function App() {
   const request = useRef<AbortController | null>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const stage = useRef<HTMLElement>(null);
+  const player = useRef<PlayerHandle>(null);
   const privacyDialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -170,6 +171,8 @@ export default function App() {
 
   function playSong(song: Song) {
     if (!canConnect()) return;
+    // Send playback during the user action instead of recreating the iframe in an effect.
+    player.current?.play(song);
     setCurrent(song);
     setPlaybackSequence((value) => value + 1);
     setQueue((items) => items.filter((item) => item.id !== song.id));
@@ -252,7 +255,7 @@ export default function App() {
                 : <span>예약곡이 없어요</span>}</div>
               <button className="next-button" onClick={playNext} disabled={!queue.length} aria-label="다음 예약곡 재생" title="다음 예약곡"><SkipForward size={20} /></button>
             </div>
-            {current ? <Player key={`${current.id}:${playbackSequence}`} song={current} onEnded={playNext} /> : <div className="empty-stage"><div className="stage-rings"><MicVocal size={33} strokeWidth={1.5} /></div><strong>무대가 준비됐어요</strong><p>노래를 선택하면 여기에 재생돼요</p><div className="equalizer" aria-hidden="true">{Array.from({ length: 19 }, (_, i) => <span key={i} style={{ height: `${8 + ((i * 13 + 7) % 25)}px` }} />)}</div></div>}
+            {current ? <Player ref={player} song={current} onEnded={playNext} /> : <div className="empty-stage"><div className="stage-rings"><MicVocal size={33} strokeWidth={1.5} /></div><strong>무대가 준비됐어요</strong><p>노래를 선택하면 여기에 재생돼요</p><div className="equalizer" aria-hidden="true">{Array.from({ length: 19 }, (_, i) => <span key={i} style={{ height: `${8 + ((i * 13 + 7) % 25)}px` }} />)}</div></div>}
             <div className="now-playing-info">
               <div><span className="track-caption">{current ? '지금 부르는 곡' : '오늘의 주인공은 당신'}</span><h2>{current ? displayTitle(current.title) : '첫 소절을 시작해 볼까요?'}</h2><p>{current ? current.channelTitle : '좋아하는 노래 한 곡이면 충분해요.'}</p></div>
             </div>
