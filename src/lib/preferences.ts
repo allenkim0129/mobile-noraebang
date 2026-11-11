@@ -22,15 +22,18 @@ export function versionQuery(query: string, preferences: SearchPreferences) {
   return [query, vocal, key].filter(Boolean).join(' ');
 }
 
-export function matchesPreferences(title: string, preferences: SearchPreferences) {
+export function allowsVocalPreference(title: string, preferences: SearchPreferences) {
   const normalized = title.normalize('NFKC').replace(/−/g, '-');
   const male = /(?:남자|남성)\s*(?:키|버전|key\b|ver\b)|남키|\bmale\s*(?:key|ver(?:sion)?)\b/i.test(normalized);
   const female = /(?:여자|여성)\s*(?:키|버전|key\b|ver\b)|여키|\bfemale\s*(?:key|ver(?:sion)?)\b/i.test(normalized);
-  const vocalMatches = preferences.vocal === 'any'
-    || (preferences.vocal === 'male' && male && !female)
-    || (preferences.vocal === 'female' && female && !male)
-    || (preferences.vocal === 'duet' && /듀엣|\bduet\b/i.test(normalized));
-  if (!vocalMatches) return false;
+  return preferences.vocal === 'male' ? !female
+    : preferences.vocal === 'female' ? !male : true;
+}
+
+export function matchesPreferences(title: string, preferences: SearchPreferences) {
+  const normalized = title.normalize('NFKC').replace(/−/g, '-');
+  if (!allowsVocalPreference(title, preferences)) return false;
+  if (preferences.vocal === 'duet' && !/듀엣|\bduet\b/i.test(normalized)) return false;
   if (preferences.keyOffset === 0) return true;
 
   const offsets = [

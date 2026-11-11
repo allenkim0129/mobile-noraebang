@@ -1,5 +1,5 @@
 import type { Provider, SearchPreferences, SearchResults, Song } from '../src/types.js';
-import { DEFAULT_PREFERENCES, hasPreferences, isVocalPreference, matchesPreferences, versionQuery } from '../src/lib/preferences.js';
+import { DEFAULT_PREFERENCES, allowsVocalPreference, hasPreferences, isVocalPreference, matchesPreferences, versionQuery } from '../src/lib/preferences.js';
 
 export class SearchError extends Error {
   constructor(
@@ -146,25 +146,29 @@ export function createYouTubeService({
       const kyId = await getKyChannel();
       const officialKey = `${baseKey}|false`;
       const previous = cache.get(officialKey);
-      const [officialResults, generalResults] = await Promise.all([
+      const [officialResults, generalResults, baseline] = await Promise.all([
         previous && previous.expiresAt > now() ? Promise.resolve(previous.value.official)
           : Promise.all([
             searchVideos(searchTerm, kyId, kyId),
             searchVideos(searchTerm, kyId, TJ_CHANNEL_ID),
           ]).then((groups) => [...new Map(groups.flat().map((song) => [song.id, song])).values()]),
         active ? searchVideos(searchTerm, kyId) : Promise.resolve(null),
+        active ? search(normalized, true) : Promise.resolve(null),
       ]);
       const alternativesLoaded = active || includeAlternatives || officialResults.length === 0;
       const otherResults = generalResults ?? (alternativesLoaded ? await searchVideos(searchTerm, kyId) : []);
       const providerOrder: Record<Provider, number> = { ky: 0, tj: 1, other: 2 };
-      const candidates = [...new Map([...officialResults, ...(active ? otherResults : [])].map((song) => [song.id, song])).values()];
+      const candidates = [...new Map([
+        ...(baseline ? [...baseline.official, ...baseline.alternatives] : []),
+        ...officialResults, ...(active ? otherResults : []),
+      ].map((song) => [song.id, song])).values()].filter((song) => allowsVocalPreference(song.title, preferences));
       const preferred = active ? candidates.filter((song) => matchesPreferences(song.title, preferences))
         .sort((a, b) => providerOrder[a.provider] - providerOrder[b.provider]) : [];
       const preferredIds = new Set(preferred.map((song) => song.id));
       const official = candidates.filter((song) => song.provider !== 'other' && !preferredIds.has(song.id))
         .sort((a, b) => providerOrder[a.provider] - providerOrder[b.provider]);
       const officialIds = new Set(officialResults.map((song) => song.id));
-      const alternatives = [...new Map(otherResults
+      const alternatives = [...new Map((active ? candidates : otherResults)
         .filter((song) => song.provider === 'other' && !officialIds.has(song.id) && !preferredIds.has(song.id))
         .map((song) => [song.id, song])).values()];
       const value: SearchResults = { official, alternatives, alternativesLoaded, ...(active ? { preferred } : {}) };

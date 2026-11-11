@@ -341,9 +341,9 @@ export default function App() {
                 {changedPreferences && <p className="status-banner" role="status">조건이 변경됐어요. 검색을 눌러 새 조건을 적용해 주세요.</p>}
                 {versionSearch && <section className="preferred-results" aria-label="선택 조건 우선 결과">
                   <div className="list-heading"><Music2 size={15} /><h3>{describePreferences(lastPreferences)}</h3><span>{preferred.length}곡</span></div>
-                  <p className="alternative-note">영상 제목의 표시 기준이에요. 실제 키와 반주 여부는 영상에서 확인해 주세요.</p>
+                  <p className="alternative-note">남자 선택은 여자키 표시만, 여자 선택은 남자키 표시만 제외해요. ±키 일치는 우선 표시하고 원곡·다른 키도 아래에 남겨요. 실제 키는 영상에서 확인해 주세요.</p>
                   {preferred.length ? preferred.map((song) => <SongRow key={song.id} song={song} playing={current?.id === song.id} queued={queueIds.has(song.id)} onPlay={() => playSong(song)} onQueue={() => addToQueue(song)} />)
-                    : <div className="empty-results">선택한 조건이 제목에 표시된 영상을 찾지 못했어요. 아래 후보는 키 확인이 필요해요.</div>}
+                    : <div className="empty-results">우선 표시할 버전을 찾지 못했어요. 원곡이나 키 표시가 없는 영상도 아래에서 확인할 수 있어요.</div>}
                   <button className="text-button" disabled={searching} onClick={() => {
                     setPreferences(DEFAULT_PREFERENCES);
                     setQuery(lastQuery);

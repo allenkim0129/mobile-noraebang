@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULT_PREFERENCES, hasPreferences, matchesPreferences, versionQuery } from './preferences.js';
+import { DEFAULT_PREFERENCES, allowsVocalPreference, hasPreferences, matchesPreferences, versionQuery } from './preferences.js';
 
 test('builds search-only version terms without changing an unfiltered query', () => {
   assert.equal(versionQuery('입춘 한로로', DEFAULT_PREFERENCES), '입춘 한로로');
@@ -9,13 +9,24 @@ test('builds search-only version terms without changing an unfiltered query', ()
   assert.equal(hasPreferences(DEFAULT_PREFERENCES), false);
 });
 
-test('requires explicit version labels rather than inferring a singer or matching female as male', () => {
-  assert.equal(matchesPreferences('한로로 입춘', { vocal: 'female', keyOffset: 0 }), false);
+test('keeps unmarked originals and excludes only opposite vocal labels', () => {
+  assert.equal(matchesPreferences('한로로 입춘', { vocal: 'female', keyOffset: 0 }), true);
+  assert.equal(matchesPreferences('남자 가수 원곡', { vocal: 'male', keyOffset: 0 }), true);
   assert.equal(matchesPreferences('입춘 Female Key', { vocal: 'male', keyOffset: 0 }), false);
   assert.equal(matchesPreferences('입춘 Male Version', { vocal: 'male', keyOffset: 0 }), true);
   assert.equal(matchesPreferences('입춘 여자 키', { vocal: 'female', keyOffset: 0 }), true);
   assert.equal(matchesPreferences('입춘 남자키 여자키', { vocal: 'male', keyOffset: 0 }), false);
   assert.equal(matchesPreferences('입춘 duet MR', { vocal: 'duet', keyOffset: 0 }), true);
+});
+
+test('key offsets prioritize matches but do not exclude unmarked or differently shifted songs', () => {
+  const preferences = { vocal: 'male', keyOffset: 2 } as const;
+  for (const title of ['입춘 원곡', '입춘 -2키', '입춘 +2키']) {
+    assert.equal(allowsVocalPreference(title, preferences), true);
+  }
+  assert.equal(matchesPreferences('입춘 +2키', preferences), true);
+  assert.equal(matchesPreferences('입춘 원곡', preferences), false);
+  assert.equal(allowsVocalPreference('입춘 여자키 +2키', preferences), false);
 });
 
 test('matches signed semitone labels exactly and requires both selected conditions', () => {

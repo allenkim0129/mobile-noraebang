@@ -72,19 +72,45 @@ test('prioritizes title-matched versions across channels, then KY and TJ, with i
   const result = await service.search('사랑', false, { vocal: 'male', keyOffset: 2 });
   assert.deepEqual(result.preferred?.map((song) => song.id), ['lmnopqrstuv', '12345678901', '23456789012']);
   assert.deepEqual(result.official.map((song) => song.id), ['abcdefghijk']);
-  assert.deepEqual(result.alternatives.map((song) => song.id), ['34567890123']);
+  assert.deepEqual(result.alternatives, []);
   assert.equal(result.alternativesLoaded, true);
-  assert.equal(calls.length, 4);
-  for (const call of calls.filter((url) => url.pathname.endsWith('/search'))) {
-    assert.ok(call.searchParams.get('q')?.startsWith('사랑 남자키 +2키'));
-  }
-  assert.equal(await service.search('사랑', true, { vocal: 'male', keyOffset: 2 }), result);
-  assert.equal(calls.length, 4);
-  await service.search('사랑', false, { vocal: 'female', keyOffset: 2 });
   assert.equal(calls.length, 7);
+  const searchQueries = calls.filter((url) => url.pathname.endsWith('/search')).map((url) => url.searchParams.get('q'));
+  assert.equal(searchQueries.filter((query) => query?.startsWith('사랑 남자키 +2키')).length, 3);
+  assert.ok(searchQueries.includes('사랑'));
+  assert.ok(searchQueries.includes('사랑 노래방 MR'));
+  assert.equal(await service.search('사랑', true, { vocal: 'male', keyOffset: 2 }), result);
+  assert.equal(calls.length, 7);
+  await service.search('사랑', false, { vocal: 'female', keyOffset: 2 });
+  assert.equal(calls.length, 10);
   const ordinary = await service.search('사랑');
   assert.equal(ordinary.preferred, undefined);
-  assert.equal(calls.length, 9);
+  assert.equal(calls.length, 12);
+});
+
+test('retains original and nonmatching offsets from broad searches and removes opposite versions everywhere', async () => {
+  const { fetcher } = fixture((url) => {
+    if (url.pathname.endsWith('/channels')) return Response.json({ items: [{ id: kyId }] });
+    const channelId = url.searchParams.get('channelId') ?? otherId;
+    const targeted = url.searchParams.get('q')?.includes('남자키');
+    const titles = targeted ? ['남자키 +2키', '여자키 +2키'] : ['원곡', '-2키', '여자키'];
+    const group = channelId === kyId ? 'k' : channelId === tjId ? 't' : 'o';
+    return Response.json({ items: titles.map((title, index) => {
+      const item = video(`${group}${targeted ? 'v' : 'b'}${index}abcdefgh`, channelId);
+      return { ...item, snippet: { ...item.snippet, title: `노래 ${title}` } };
+    }) });
+  });
+  const service = createYouTubeService({ apiKey: 'test-key', fetcher });
+  const shifted = await service.search('노래', false, { vocal: 'male', keyOffset: 2 });
+  assert.deepEqual(shifted.preferred?.map((song) => song.provider), ['ky', 'tj', 'other']);
+  assert.equal(shifted.official.length, 4);
+  assert.equal(shifted.alternatives.length, 2);
+  const all = [...shifted.preferred ?? [], ...shifted.official, ...shifted.alternatives];
+  assert.ok(all.some((song) => song.title === '노래 원곡'));
+  assert.ok(all.some((song) => song.title === '노래 -2키'));
+  assert.ok(all.every((song) => !song.title.includes('여자키')));
+  const unshifted = await service.search('노래', false, { vocal: 'male', keyOffset: 0 });
+  assert.ok(unshifted.preferred?.some((song) => song.title === '노래 원곡'));
 });
 
 test('leaves unmarked versions unverified and rejects invalid search offsets before upstream requests', async () => {
