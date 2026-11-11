@@ -5,13 +5,14 @@ import { getSearchSuggestions, type SearchSuggestion } from './lib/suggestions.j
 interface SearchFormProps {
   value: string;
   searching: boolean;
+  keyboardOpen: boolean;
   recentSearches: string[];
   inputRef: RefObject<HTMLInputElement | null>;
   onChange(value: string): void;
   onSubmit(value: string): void;
 }
 
-export default function SearchForm({ value, searching, recentSearches, inputRef, onChange, onSubmit }: SearchFormProps) {
+export default function SearchForm({ value, searching, keyboardOpen, recentSearches, inputRef, onChange, onSubmit }: SearchFormProps) {
   const root = useRef<HTMLDivElement>(null);
   const composing = useRef(false);
   const listId = useId();
@@ -43,10 +44,15 @@ export default function SearchForm({ value, searching, recentSearches, inputRef,
     }
   }, [active, visible, listId]);
 
+  function submit(term: string) {
+    dismiss();
+    if (keyboardOpen) inputRef.current?.blur();
+    onSubmit(term);
+  }
+
   function select(suggestion: SearchSuggestion) {
     onChange(suggestion.query);
-    dismiss();
-    onSubmit(suggestion.query);
+    submit(suggestion.query);
   }
 
   function keyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -79,8 +85,7 @@ export default function SearchForm({ value, searching, recentSearches, inputRef,
       <form className="search-form" onSubmit={(event) => {
         event.preventDefault();
         if (composing.current) return;
-        dismiss();
-        onSubmit(value);
+        submit(value);
       }}>
         <label className="sr-only" htmlFor="song-search">곡 제목 또는 가수</label>
         <Search size={21} className="search-field-icon" />

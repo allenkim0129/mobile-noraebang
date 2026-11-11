@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Player, { type PlayerHandle } from './Player.js';
 import SearchForm from './SearchForm.js';
+import useSearchKeyboard from './useSearchKeyboard.js';
 import { appendToQueue, displayTitle } from './lib/songs.js';
 import { rememberSearch } from './lib/suggestions.js';
 import type { ApiError, AppConfig, Provider, SearchResults, Song } from './types.js';
@@ -75,6 +76,7 @@ export default function App() {
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const request = useRef<AbortController | null>(null);
   const searchInput = useRef<HTMLInputElement>(null);
+  const keyboardViewport = useSearchKeyboard(searchInput);
   const stage = useRef<HTMLElement>(null);
   const player = useRef<PlayerHandle>(null);
   const privacyDialog = useRef<HTMLDialogElement>(null);
@@ -216,7 +218,7 @@ export default function App() {
   const nextSong = queue[0];
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${keyboardViewport ? ' search-keyboard' : ''}`} style={keyboardViewport ?? undefined}>
       <div className="landscape-topbar"><NextUp song={nextSong} onNext={playNext} /></div>
       <header className="site-header">
         <a className="brand" href="/" aria-label="norae. 홈"><span className="brand-icon"><AudioLines size={23} /></span>norae<span className="brand-dot">.</span></a>
@@ -255,7 +257,7 @@ export default function App() {
           <div className="library-column">
           <section className="discovery" aria-label="노래 검색">
             <div className="search-card">
-              <SearchForm value={query} inputRef={searchInput}
+              <SearchForm value={query} inputRef={searchInput} keyboardOpen={Boolean(keyboardViewport)}
                 searching={searching} recentSearches={recentSearches}
                 onChange={setQuery} onSubmit={(value) => void searchSongs(value)} />
               <div className="search-hint"><ShieldCheck size={14} />금영 반주를 먼저, TJ와 다른 MR도 찾아드려요</div>

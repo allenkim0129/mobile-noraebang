@@ -353,6 +353,21 @@ footer > button { display: flex; align-items: center; gap: 5px; background: none
   .queue-list { max-height: none; overflow: visible; }
   .queue-note { flex-wrap: wrap; text-align: center; }
   .landscape-tools { display: block; margin-top: 16px; padding: 12px 4px; border-top: 1px solid var(--line); }
+  .app-shell.search-keyboard { position: fixed; left: 0; grid-template-rows: minmax(0, 1fr); }
+  .search-keyboard .landscape-topbar { display: none; }
+  .search-keyboard .workspace { padding-block: 4px; }
+  .search-keyboard .library-column { padding: 0; overflow: hidden; }
+  .search-keyboard .discovery, .search-keyboard .search-card { height: 100%; min-height: 0; }
+  .search-keyboard .discovery > :not(.search-card), .search-keyboard .library-column > :not(.discovery) { display: none; }
+  .search-keyboard .search-card { padding: 0; border: 0; background: none; }
+  .search-keyboard .search-input-group { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .search-keyboard .search-form { flex-shrink: 0; padding-block: 4px; }
+  .search-keyboard .search-submit { width: 32px; height: 32px; }
+  .search-keyboard .autocomplete-panel { position: static; flex: 1; min-height: 0; margin-top: 4px; display: flex; flex-direction: column; box-shadow: none; }
+  .search-keyboard .autocomplete-heading, .search-keyboard .autocomplete-footer, .search-keyboard .autocomplete-label > span { display: none; }
+  .search-keyboard .autocomplete-panel ul { flex: 1; min-height: 0; max-height: none; }
+  .search-keyboard .autocomplete-option { min-height: 44px; padding-block: 8px; }
+  .search-keyboard .autocomplete-empty { overflow-y: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
