@@ -17,7 +17,7 @@ test('API validates input, reports missing configuration, limits requests and do
 
   const config = await fetch(`${base}/api/config`);
   assert.deepEqual(await config.json(), { searchConfigured: false, hosting: 'local' });
-  assert.equal(config.headers.get('permissions-policy'), 'camera=(), microphone=()');
+  assert.equal(config.headers.get('permissions-policy'), 'camera=(), microphone=(self)');
   assert.equal(config.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
   assert.equal(config.headers.get('x-powered-by'), null);
   assert.equal((await fetch(`${base}/api/search?q=`)).status, 400);

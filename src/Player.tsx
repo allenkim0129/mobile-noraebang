@@ -4,12 +4,17 @@ import type { Song } from './types.js';
 
 interface YouTubePlayer {
   playVideo(): void;
+  pauseVideo(): void;
+  cueVideoById(options: { videoId: string; startSeconds: number }): void;
   loadVideoById(options: { videoId: string; startSeconds: number }): void;
   destroy(): void;
 }
 
 export interface PlayerHandle {
   play(song: Song): void;
+  prepare(song: Song): void;
+  pause(): void;
+  resume(): void;
 }
 
 interface PlayerOptions {
@@ -68,12 +73,18 @@ function playerError(code: number) {
   return '이 영상을 재생하지 못했어요. 다시 시도하거나 다른 반주를 골라 주세요.';
 }
 
-export default function Player({ song, onEnded, ref }: { song: Song; onEnded(): void; ref: Ref<PlayerHandle> }) {
+export default function Player({ song, startPaused = false, onEnded, onIssue, onPlaying, ref }: { song: Song; startPaused?: boolean; onEnded(): void; onIssue?(message: string, requiresTap?: boolean): void; onPlaying?(): void; ref: Ref<PlayerHandle> }) {
   const host = useRef<HTMLDivElement>(null);
   const ended = useRef(onEnded);
   const selected = useRef(song);
   const instance = useRef<YouTubePlayer | null>(null);
   const instanceReady = useRef(false);
+  const shouldPlay = useRef(!startPaused);
+  const prepared = useRef(startPaused);
+  const issue = useRef(onIssue);
+  issue.current = onIssue;
+  const playing = useRef(onPlaying);
+  playing.current = onPlaying;
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
@@ -81,12 +92,32 @@ export default function Player({ song, onEnded, ref }: { song: Song; onEnded(): 
 
   useImperativeHandle(ref, () => ({
     play(nextSong) {
+      const usePrepared = prepared.current && selected.current.id === nextSong.id;
+      shouldPlay.current = true;
+      prepared.current = false;
       selected.current = nextSong;
       setError('');
       setAutoplayBlocked(false);
       if (instanceReady.current && instance.current) {
-        instance.current.loadVideoById({ videoId: nextSong.id, startSeconds: 0 });
+        if (usePrepared) instance.current.playVideo();
+        else instance.current.loadVideoById({ videoId: nextSong.id, startSeconds: 0 });
       }
+    },
+    prepare(nextSong) {
+      shouldPlay.current = false;
+      prepared.current = true;
+      selected.current = nextSong;
+      setError('');
+      setAutoplayBlocked(false);
+      if (instanceReady.current) instance.current?.cueVideoById({ videoId: nextSong.id, startSeconds: 0 });
+    },
+    pause() {
+      shouldPlay.current = false;
+      if (instanceReady.current) instance.current?.pauseVideo();
+    },
+    resume() {
+      shouldPlay.current = true;
+      if (instanceReady.current) instance.current?.playVideo();
     },
   }), []);
 
@@ -113,21 +144,38 @@ export default function Player({ song, onEnded, ref }: { song: Song; onEnded(): 
             instance.current = readyPlayer;
             instanceReady.current = true;
             setReady(true);
-            if (selected.current.id === initialVideoId) readyPlayer.playVideo();
+            if (!shouldPlay.current) readyPlayer.cueVideoById({ videoId: selected.current.id, startSeconds: 0 });
+            else if (selected.current.id === initialVideoId) readyPlayer.playVideo();
             else readyPlayer.loadVideoById({ videoId: selected.current.id, startSeconds: 0 });
           },
           onStateChange: ({ data }) => {
             if (disposed) return;
-            if (data === 1) setAutoplayBlocked(false);
+            if (data === 1) {
+              setAutoplayBlocked(false);
+              playing.current?.();
+            }
             if (data === 0) ended.current();
           },
-          onError: ({ data }) => { if (!disposed) setError(playerError(data)); },
-          onAutoplayBlocked: () => { if (!disposed) setAutoplayBlocked(true); },
+          onError: ({ data }) => {
+            if (disposed) return;
+            const message = playerError(data);
+            setError(message);
+            issue.current?.(message);
+          },
+          onAutoplayBlocked: () => {
+            if (disposed) return;
+            setAutoplayBlocked(true);
+            issue.current?.('브라우저가 음성 확인 뒤의 재생을 차단했어요. 정차 후 아래 재생 버튼이나 영상 안의 재생 버튼을 한 번 직접 눌러 주세요.', true);
+          },
         },
       });
       instance.current = player;
     }).catch((cause: unknown) => {
-      if (!disposed) setError(cause instanceof Error ? cause.message : '플레이어를 불러오지 못했어요.');
+      if (!disposed) {
+        const message = cause instanceof Error ? cause.message : '플레이어를 불러오지 못했어요.';
+        setError(message);
+        issue.current?.(message);
+      }
     });
     return () => {
       disposed = true;
@@ -148,7 +196,10 @@ export default function Player({ song, onEnded, ref }: { song: Song; onEnded(): 
         <div className="player-error" role="alert">
           <p>{error}</p>
           <div className="inline-actions">
-            <button className="text-button" onClick={() => setRetry((value) => value + 1)}><RefreshCw size={14} /> 다시 시도</button>
+            <button className="text-button" onClick={() => {
+              shouldPlay.current = true;
+              setRetry((value) => value + 1);
+            }}><RefreshCw size={14} /> 다시 시도</button>
             <a href={`https://www.youtube.com/watch?v=${song.id}`} target="_blank" rel="noopener noreferrer">YouTube에서 열기 <ExternalLink size={13} /></a>
           </div>
         </div>

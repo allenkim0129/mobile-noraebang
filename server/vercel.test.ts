@@ -111,7 +111,7 @@ test('deployment configuration serves Vite assets without rewriting API function
   assert.ok(headers.some((header: { key: string; value: string }) =>
     header.key === 'Referrer-Policy' && header.value === 'strict-origin-when-cross-origin'));
   assert.ok(headers.some((header: { key: string; value: string }) =>
-    header.key === 'Permissions-Policy' && header.value === 'camera=(), microphone=()'));
+    header.key === 'Permissions-Policy' && header.value === 'camera=(), microphone=(self)'));
   const ignored = await readFile(new URL('../.vercelignore', import.meta.url), 'utf8');
   assert.ok(ignored.split('\n').includes('.env'));
   assert.ok(ignored.split('\n').includes('.env.*'));

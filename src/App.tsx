@@ -8,6 +8,7 @@ import Player, { type PlayerHandle } from './Player.js';
 import SearchForm from './SearchForm.js';
 import SearchPreferences from './SearchPreferences.js';
 import QueuePanel from './QueuePanel.js';
+import VoiceMode from './VoiceMode.js';
 import useSearchKeyboard from './useSearchKeyboard.js';
 import { DEFAULT_PREFERENCES, describePreferences, hasPreferences } from './lib/preferences.js';
 import { appendToQueue, displayTitle, moveInQueue, providerName } from './lib/songs.js';
@@ -79,6 +80,9 @@ export default function App() {
   const [storageWarning, setStorageWarning] = useState('');
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceIssue, setVoiceIssue] = useState<{ message: string; requiresTap?: boolean } | null>(null);
+  const [voicePlaybackStarted, setVoicePlaybackStarted] = useState(0);
   const request = useRef<AbortController | null>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const keyboardViewport = useSearchKeyboard(searchInput);
@@ -131,12 +135,12 @@ export default function App() {
   }, [queueOpen]);
 
   useEffect(() => {
-    if (!current || window.matchMedia('(orientation: landscape) and (min-width: 560px)').matches) return;
+    if (voiceMode || !current || window.matchMedia('(orientation: landscape) and (min-width: 560px)').matches) return;
     stage.current?.scrollIntoView({
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
       block: 'start',
     });
-  }, [current, playbackSequence]);
+  }, [current, playbackSequence, voiceMode]);
 
   function acceptConsent() {
     setConsent(true);
@@ -202,7 +206,13 @@ export default function App() {
     setCurrent(song);
     setQueueOpen(false);
     setPlaybackSequence((value) => value + 1);
-    setQueue((items) => items.filter((item) => item.id !== song.id));
+    if (!voiceMode) setQueue((items) => items.filter((item) => item.id !== song.id));
+  }
+
+  function prepareVoiceSong(song: Song) {
+    player.current?.prepare(song);
+    setCurrent(song);
+    setVoiceIssue(null);
   }
 
   function addToQueue(song: Song) {
@@ -224,6 +234,10 @@ export default function App() {
   }
 
   function playNext() {
+    if (voiceMode) {
+      setVoiceIssue({ message: '곡이 끝났어요. 마이크는 꺼져 있어요. 다른 곡은 정차 후 노래 말하기를 눌러 찾아 주세요.' });
+      return;
+    }
     const next = queue[0];
     if (next) playSong(next);
     else setNotice('마지막 곡이에요. 다음에 부를 곡을 예약해 보세요.');
@@ -249,8 +263,18 @@ export default function App() {
   const changedPreferences = preferences.vocal !== lastPreferences.vocal || preferences.keyOffset !== lastPreferences.keyOffset;
 
   return (
-    <div className={`app-shell${keyboardViewport ? ' search-keyboard' : ''}`} style={keyboardViewport ?? undefined}>
+    <div className={`app-shell${keyboardViewport ? ' search-keyboard' : ''}${voiceMode ? ' voice-mode' : ''}`} style={keyboardViewport ?? undefined}>
       <div className="top-controls">
+        <button className="mode-switch outline-button" onClick={() => {
+          request.current?.abort();
+          setSearching(false);
+          player.current?.pause();
+          setQueueOpen(false);
+          setVoiceIssue(null);
+          setVoicePlaybackStarted(0);
+          searchInput.current?.blur();
+          setVoiceMode((value) => !value);
+        }}>{voiceMode ? '일반 모드로 돌아가기' : '음성 모드'}</button>
         <button className="queue-open icon-button" aria-label={`예약곡 목록 열기 (${queue.length}곡)`} aria-haspopup="dialog" aria-expanded={queueOpen} onClick={(event) => {
           event.currentTarget.focus({ preventScroll: true });
           setQueueOpen(true);
@@ -285,13 +309,18 @@ export default function App() {
           <section className="stage-card" ref={stage} aria-label="노래 재생">
             <div className="panel-heading"><span className="eyebrow"><span className={`live-dot ${current ? '' : 'muted'}`} /> NOW PLAYING</span><button className="icon-button" aria-label="플레이어 크게 보기" title="크게 보기" disabled={!current} onClick={() => void fullscreen()}><Maximize2 size={16} /></button></div>
             <NextUp song={nextSong} onNext={playNext} />
-            {current ? <Player ref={player} song={current} onEnded={playNext} /> : <div className="empty-stage"><div className="stage-rings"><MicVocal size={33} strokeWidth={1.5} /></div><strong>무대가 준비됐어요</strong><p>노래를 선택하면 여기에 재생돼요</p><div className="equalizer" aria-hidden="true">{Array.from({ length: 19 }, (_, i) => <span key={i} style={{ height: `${8 + ((i * 13 + 7) % 25)}px` }} />)}</div></div>}
+            {current ? <Player ref={player} song={current} startPaused={voiceMode} onEnded={playNext}
+              onIssue={voiceMode ? (message, requiresTap) => setVoiceIssue({ message, requiresTap }) : undefined}
+              onPlaying={voiceMode ? () => setVoicePlaybackStarted((value) => value + 1) : undefined} /> : <div className="empty-stage"><div className="stage-rings"><MicVocal size={33} strokeWidth={1.5} /></div><strong>무대가 준비됐어요</strong><p>노래를 선택하면 여기에 재생돼요</p><div className="equalizer" aria-hidden="true">{Array.from({ length: 19 }, (_, i) => <span key={i} style={{ height: `${8 + ((i * 13 + 7) % 25)}px` }} />)}</div></div>}
             <div className="now-playing-info">
               <div><span className="track-caption">{current ? '지금 부르는 곡' : '오늘의 주인공은 당신'}</span><h2>{current ? displayTitle(current.title) : '첫 소절을 시작해 볼까요?'}</h2><p>{current ? current.channelTitle : '좋아하는 노래 한 곡이면 충분해요.'}</p></div>
             </div>
             <div className="stage-footnote"><Music2 size={13} />가사와 반주는 YouTube 원본 영상으로 제공돼요</div>
           </section>
 
+          {voiceMode && <VoiceMode consent={consent} configured={configured} configError={configError} issue={voiceIssue} playbackStarted={voicePlaybackStarted}
+            onConsent={acceptConsent} onPrepare={prepareVoiceSong} onPlay={playSong} onPause={() => player.current?.pause()} onResume={() => player.current?.resume()}
+            onPrivacy={() => setPrivacyOpen(true)} />}
           <div className="library-column">
           <section className="discovery" aria-label="노래 검색">
             <div className="search-card">
@@ -389,7 +418,8 @@ export default function App() {
         <h3>YouTube 연결</h3><p>YouTube API Services로 검색하고 공식 플레이어로 영상을 재생합니다. 사용 시 <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer">YouTube 서비스 약관</a>에 동의하게 됩니다. Google의 데이터 처리는 <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google 개인정보처리방침</a>을 따릅니다.</p>
         <h3>처리하는 정보</h3><p>검색어와 선택한 버전·키 조건은 검색 서버와 Google에 전달됩니다. 서버는 검색 결과를 최대 5분 동안 메모리에 보관하며, 요청 제한을 위해 IP 주소와 요청 횟수를 최대 1분 동안 메모리에서 처리합니다. 별도 검색 기록 DB나 분석 도구는 사용하지 않습니다. 호스팅 업체의 접속 로그 정책은 배포 환경에 따라 달라집니다.</p>
         <p>입력 중 자동 추천은 준비된 곡·가수 목록과 이 탭의 최근 검색어로 기기에서 처리하며, 추천을 선택하거나 검색을 실행하기 전에는 검색어를 서버로 보내지 않습니다. 최근 검색어와 예약 목록은 이 탭의 메모리에만 유지되고 새로고침하면 삭제됩니다.</p>
-        <p>영상 재생 시 YouTube가 IP 주소, 기기 정보 및 쿠키 등을 처리할 수 있습니다. 기기 저장소에는 연결 동의 여부만 저장합니다. 마이크와 카메라는 사용하지 않습니다.</p>
+        <p>영상 재생 시 YouTube가 IP 주소, 기기 정보 및 쿠키 등을 처리할 수 있습니다. 기기 저장소에는 YouTube 연결 동의 여부만 저장합니다. 카메라는 사용하지 않습니다.</p>
+        <h3>선택형 음성 모드</h3><p>음성 처리 안내에 별도로 동의한 뒤 듣기를 시작하면 마이크를 사용합니다. 브라우저의 음성 인식 서비스로 음성이 전송될 수 있고, 해당 제공자의 처리가 적용됩니다. 앱 서버는 음성을 받거나 녹음·저장하지 않으며 인식한 검색어만 서버와 Google에 전달합니다. 인식한 문장과 후보는 탭 메모리에만 유지되고 음성 모드를 나가면 삭제됩니다. 검색·안내·영상 재생 중에는 마이크를 끄며, 모드 종료·취소·화면 이탈 시 인식을 중단합니다. 화면 잠금이나 운전 중 무터치 동작을 보장하지 않습니다. 기기 권한은 브라우저 설정에서 철회할 수 있습니다.</p>
         <h3>제한 사항</h3><p>영상 가용성, 광고, 재생 제한은 YouTube와 권리자의 설정을 따릅니다. 개인용이라는 표기가 별도 이용허락을 대신하지 않으며, 공개 서비스나 수익화 전에는 정책·권리 범위를 다시 검토해야 합니다.</p>
         {consent && <button className="outline-button" onClick={() => {
           request.current?.abort();
@@ -398,6 +428,8 @@ export default function App() {
           setQueue([]);
           setResults(null);
           setRecentSearches([]);
+          setVoiceMode(false);
+          setVoiceIssue(null);
           setConsent(false);
           try { localStorage.removeItem('norae-consent-v1'); }
           catch { setStorageWarning('저장된 동의 설정을 지우지 못했어요. 브라우저 사이트 데이터를 직접 삭제해 주세요.'); }
