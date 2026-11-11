@@ -1,5 +1,6 @@
 import express from 'express';
 import type { AppConfig } from '../src/types.js';
+import { isVocalPreference } from '../src/lib/preferences.js';
 import { SearchError, type YouTubeService } from './youtube.js';
 
 export function createApp(
@@ -24,10 +25,14 @@ export function createApp(
   const requests = new Map<string, { count: number; resetsAt: number }>();
   app.get('/api/search', async (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
-    const { q, alternatives } = req.query;
+    const { q, alternatives, vocal = 'any', key = '0' } = req.query;
     if (typeof q !== 'string' || !q.trim() || q.trim().length > 100
       || (alternatives !== undefined && alternatives !== 'true')) {
       res.status(400).json({ code: 'INVALID_QUERY', error: '검색어를 1~100자로 입력해 주세요.' });
+      return;
+    }
+    if (!isVocalPreference(vocal) || typeof key !== 'string' || !/^-?[0-6]$/.test(key)) {
+      res.status(400).json({ code: 'INVALID_PREFERENCES', error: '검색 버전과 -6~+6 범위의 정수 키를 선택해 주세요.' });
       return;
     }
     const now = Date.now();
@@ -44,7 +49,7 @@ export function createApp(
     entry.count += 1;
     requests.set(ip, entry);
     try {
-      res.json(await service.search(q, alternatives === 'true'));
+      res.json(await service.search(q, alternatives === 'true', { vocal, keyOffset: Number(key) }));
     } catch (error) {
       next(error);
     }

@@ -23,6 +23,11 @@ test('API validates input, reports missing configuration, limits requests and do
   assert.equal((await fetch(`${base}/api/search?q=`)).status, 400);
   assert.equal((await fetch(`${base}/api/search?q=test&alternatives=wrong`)).status, 400);
   assert.equal((await fetch(`${base}/api/search?q=test&q=other`)).status, 400);
+  for (const suffix of ['vocal=unknown', 'vocal=male&vocal=female', 'key=7', 'key=-7', 'key=1.5', 'key=', 'key=NaN', 'key=0&key=2']) {
+    const invalid = await fetch(`${base}/api/search?q=test&${suffix}`);
+    assert.equal(invalid.status, 400, suffix);
+    assert.equal((await invalid.json()).code, 'INVALID_PREFERENCES');
+  }
 
   const search = await fetch(`${base}/api/search?q=test`);
   assert.equal(search.status, 503);

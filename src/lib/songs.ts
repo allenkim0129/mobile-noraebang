@@ -1,4 +1,6 @@
-import type { Song } from '../types.js';
+import type { Provider, Song } from '../types.js';
+
+export const providerName: Record<Provider, string> = { tj: 'TJ', ky: '금영', other: 'YouTube' };
 
 export function decodeTitle(title: string): string {
   return title.replace(/&(?:amp|quot|apos|lt|gt|#39|#(\d+)|#x([\da-f]+));/gi, (entity, decimal: string, hex: string) => {
@@ -22,4 +24,16 @@ export function displayTitle(title: string) {
 
 export function appendToQueue(queue: Song[], song: Song): Song[] {
   return queue.some((item) => item.id === song.id) ? queue : [...queue, song];
+}
+
+export function moveInQueue(queue: Song[], id: string, direction: -1 | 1): Song[] {
+  const index = queue.findIndex((song) => song.id === id);
+  const target = index + direction;
+  const song = queue[index];
+  const adjacent = queue[target];
+  if (!song || !adjacent) return queue;
+  const reordered = [...queue];
+  reordered[index] = adjacent;
+  reordered[target] = song;
+  return reordered;
 }

@@ -54,6 +54,52 @@ test('validates queries before spending quota', async () => {
   assert.equal(calls.length, 0);
 });
 
+test('prioritizes title-matched versions across channels, then KY and TJ, with isolated caches', async () => {
+  const track = (id: string, title: string, channelId: string) => {
+    const item = video(id, channelId);
+    return { ...item, snippet: { ...item.snippet, title } };
+  };
+  const kyMatch = track('lmnopqrstuv', '사랑 남자키 +2키', kyId);
+  const { calls, fetcher } = fixture((url) => {
+    if (url.pathname.endsWith('/channels')) return Response.json({ items: [{ id: kyId }] });
+    const channel = url.searchParams.get('channelId');
+    return Response.json({ items: channel === kyId
+      ? [track('abcdefghijk', '사랑 원키', kyId), kyMatch]
+      : channel === tjId ? [track('12345678901', '사랑 남자키 key +2', tjId)]
+        : [track('23456789012', '사랑 남자키 2키 올림', otherId), kyMatch, track('34567890123', '사랑 여자키 +2키', otherId)] });
+  });
+  const service = createYouTubeService({ apiKey: 'test-key', fetcher });
+  const result = await service.search('사랑', false, { vocal: 'male', keyOffset: 2 });
+  assert.deepEqual(result.preferred?.map((song) => song.id), ['lmnopqrstuv', '12345678901', '23456789012']);
+  assert.deepEqual(result.official.map((song) => song.id), ['abcdefghijk']);
+  assert.deepEqual(result.alternatives.map((song) => song.id), ['34567890123']);
+  assert.equal(result.alternativesLoaded, true);
+  assert.equal(calls.length, 4);
+  for (const call of calls.filter((url) => url.pathname.endsWith('/search'))) {
+    assert.ok(call.searchParams.get('q')?.startsWith('사랑 남자키 +2키'));
+  }
+  assert.equal(await service.search('사랑', true, { vocal: 'male', keyOffset: 2 }), result);
+  assert.equal(calls.length, 4);
+  await service.search('사랑', false, { vocal: 'female', keyOffset: 2 });
+  assert.equal(calls.length, 7);
+  const ordinary = await service.search('사랑');
+  assert.equal(ordinary.preferred, undefined);
+  assert.equal(calls.length, 9);
+});
+
+test('leaves unmarked versions unverified and rejects invalid search offsets before upstream requests', async () => {
+  const { calls, fetcher } = fixture();
+  const service = createYouTubeService({ apiKey: 'test-key', fetcher });
+  for (const keyOffset of [-7, 7, 1.5, NaN]) {
+    await assert.rejects(service.search('노래', false, { vocal: 'male', keyOffset }), rejectsCode('INVALID_PREFERENCES'));
+  }
+  assert.equal(calls.length, 0);
+  const result = await service.search('노래', false, { vocal: 'duet', keyOffset: -1 });
+  assert.deepEqual(result.preferred, []);
+  assert.equal(result.official.length, 2);
+  assert.equal(result.alternatives.length, 1);
+});
+
 test('shows KY before TJ with verified official IDs and embeddable-video restrictions', async () => {
   const { calls, fetcher } = fixture();
   const result = await createYouTubeService({ apiKey: 'test-key', fetcher }).search(' 아이유   밤편지 ');

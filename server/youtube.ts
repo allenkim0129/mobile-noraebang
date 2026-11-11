@@ -1,4 +1,5 @@
-import type { Provider, SearchResults, Song } from '../src/types.js';
+import type { Provider, SearchPreferences, SearchResults, Song } from '../src/types.js';
+import { DEFAULT_PREFERENCES, hasPreferences, isVocalPreference, matchesPreferences, versionQuery } from '../src/lib/preferences.js';
 
 export class SearchError extends Error {
   constructor(
@@ -124,12 +125,18 @@ export function createYouTubeService({
     });
   }
 
-  async function search(query: string, includeAlternatives = false): Promise<SearchResults> {
+  async function search(query: string, includeAlternatives = false, preferences: SearchPreferences = DEFAULT_PREFERENCES): Promise<SearchResults> {
     const normalized = query.trim().replace(/\s+/g, ' ');
     if (!normalized || normalized.length > 100) {
       throw new SearchError(400, 'INVALID_QUERY', '검색어를 1~100자로 입력해 주세요.');
     }
-    const key = `${normalized.toLocaleLowerCase('ko')}|${includeAlternatives}`;
+    if (!isVocalPreference(preferences.vocal) || !Number.isInteger(preferences.keyOffset) || Math.abs(preferences.keyOffset) > 6) {
+      throw new SearchError(400, 'INVALID_PREFERENCES', '검색 버전과 -6~+6 범위의 정수 키를 선택해 주세요.');
+    }
+    const active = hasPreferences(preferences);
+    const searchTerm = versionQuery(normalized, preferences);
+    const baseKey = `${normalized.toLocaleLowerCase('ko')}|${preferences.vocal}|${preferences.keyOffset}`;
+    const key = `${baseKey}|${includeAlternatives || active}`;
     const cached = cache.get(key);
     if (cached && cached.expiresAt > now()) return cached.value;
     const inFlight = pending.get(key);
@@ -137,25 +144,30 @@ export function createYouTubeService({
 
     const work = (async () => {
       const kyId = await getKyChannel();
-      const officialKey = `${normalized.toLocaleLowerCase('ko')}|false`;
+      const officialKey = `${baseKey}|false`;
       const previous = cache.get(officialKey);
-      let official: Song[];
-      if (previous && previous.expiresAt > now()) {
-        official = previous.value.official;
-      } else {
-        const [ky, tj] = await Promise.all([
-          searchVideos(normalized, kyId, kyId),
-          searchVideos(normalized, kyId, TJ_CHANNEL_ID),
-        ]);
-        official = [...new Map([...ky, ...tj].map((song) => [song.id, song])).values()];
-      }
-      const alternativesLoaded = includeAlternatives || official.length === 0;
-      const otherResults = alternativesLoaded ? await searchVideos(normalized, kyId) : [];
-      const officialIds = new Set(official.map((song) => song.id));
+      const [officialResults, generalResults] = await Promise.all([
+        previous && previous.expiresAt > now() ? Promise.resolve(previous.value.official)
+          : Promise.all([
+            searchVideos(searchTerm, kyId, kyId),
+            searchVideos(searchTerm, kyId, TJ_CHANNEL_ID),
+          ]).then((groups) => [...new Map(groups.flat().map((song) => [song.id, song])).values()]),
+        active ? searchVideos(searchTerm, kyId) : Promise.resolve(null),
+      ]);
+      const alternativesLoaded = active || includeAlternatives || officialResults.length === 0;
+      const otherResults = generalResults ?? (alternativesLoaded ? await searchVideos(searchTerm, kyId) : []);
+      const providerOrder: Record<Provider, number> = { ky: 0, tj: 1, other: 2 };
+      const candidates = [...new Map([...officialResults, ...(active ? otherResults : [])].map((song) => [song.id, song])).values()];
+      const preferred = active ? candidates.filter((song) => matchesPreferences(song.title, preferences))
+        .sort((a, b) => providerOrder[a.provider] - providerOrder[b.provider]) : [];
+      const preferredIds = new Set(preferred.map((song) => song.id));
+      const official = candidates.filter((song) => song.provider !== 'other' && !preferredIds.has(song.id))
+        .sort((a, b) => providerOrder[a.provider] - providerOrder[b.provider]);
+      const officialIds = new Set(officialResults.map((song) => song.id));
       const alternatives = [...new Map(otherResults
-        .filter((song) => song.provider === 'other' && !officialIds.has(song.id))
+        .filter((song) => song.provider === 'other' && !officialIds.has(song.id) && !preferredIds.has(song.id))
         .map((song) => [song.id, song])).values()];
-      const value = { official, alternatives, alternativesLoaded };
+      const value: SearchResults = { official, alternatives, alternativesLoaded, ...(active ? { preferred } : {}) };
       for (const [entryKey, entry] of cache) {
         if (entry.expiresAt <= now()) cache.delete(entryKey);
       }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { appendToQueue, decodeTitle, displayTitle } from './songs.js';
+import { appendToQueue, decodeTitle, displayTitle, moveInQueue } from './songs.js';
 import type { Song } from '../types.js';
 
 const id = 'abcdefghijk';
@@ -21,4 +21,27 @@ test('queues unique songs in insertion order without mutating existing entries',
   assert.deepEqual(initial, []);
   assert.deepEqual(queue, [first, second]);
   assert.equal(appendToQueue(queue, first), queue);
+});
+
+test('moves queued songs one position without changing identities or mutating the queue', () => {
+  const first: Song = { id, title: '첫 곡', channelTitle: '금영', provider: 'ky' };
+  const second: Song = { ...first, id: 'lmnopqrstuv', title: '두 번째 곡' };
+  const third: Song = { ...first, id: '12345678901', title: '세 번째 곡' };
+  const queue = [first, second, third];
+  const moved = moveInQueue(queue, second.id, -1);
+  assert.deepEqual(moved, [second, first, third]);
+  assert.deepEqual(queue, [first, second, third]);
+  assert.equal(moved[0], second);
+  assert.deepEqual(moveInQueue(moved, second.id, 1), queue);
+  assert.deepEqual(moveInQueue(queue, third.id, -1), [first, third, second]);
+});
+
+test('keeps queue boundaries, missing songs and empty queues unchanged', () => {
+  const first: Song = { id, title: '첫 곡', channelTitle: '금영', provider: 'ky' };
+  const queue = [first];
+  assert.equal(moveInQueue(queue, first.id, -1), queue);
+  assert.equal(moveInQueue(queue, first.id, 1), queue);
+  assert.equal(moveInQueue(queue, 'not-queued', 1), queue);
+  const empty: Song[] = [];
+  assert.equal(moveInQueue(empty, first.id, -1), empty);
 });

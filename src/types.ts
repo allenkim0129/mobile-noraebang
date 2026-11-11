@@ -1,4 +1,10 @@
 export type Provider = 'tj' | 'ky' | 'other';
+export type VocalPreference = 'any' | 'male' | 'female' | 'duet';
+
+export interface SearchPreferences {
+  vocal: VocalPreference;
+  keyOffset: number;
+}
 
 export interface AppConfig {
   searchConfigured: boolean;
@@ -13,6 +19,7 @@ export interface Song {
 }
 
 export interface SearchResults {
+  preferred?: Song[];
   official: Song[];
   alternatives: Song[];
   alternativesLoaded: boolean;
