@@ -25,7 +25,7 @@ if (process.env.NODE_ENV === 'production') {
 const server = app.listen(port, host, () => {
   console.log(`norae. is ready at http://localhost:${port}`);
   if (!process.env.YOUTUBE_API_KEY?.trim()) {
-    console.warn('YouTube search is not configured. Set YOUTUBE_API_KEY in .env. Link playback is available.');
+    console.warn('YouTube search is not configured. Set YOUTUBE_API_KEY in .env.');
   }
 });
 server.on('error', (error) => {

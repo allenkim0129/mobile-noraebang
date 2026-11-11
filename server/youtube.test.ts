@@ -37,7 +37,12 @@ test('missing API key gives an actionable error without making upstream requests
   const { calls, fetcher } = fixture();
   const service = createYouTubeService({ fetcher });
   assert.equal(service.configured, false);
-  await assert.rejects(service.search('아이유'), rejectsCode('NOT_CONFIGURED'));
+  await assert.rejects(service.search('아이유'), (error: unknown) => {
+    assert.ok(error instanceof SearchError);
+    assert.equal(error.code, 'NOT_CONFIGURED');
+    assert.equal(error.message, '노래 검색을 사용하려면 서버에 YouTube API 키를 설정해 주세요.');
+    return true;
+  });
   assert.equal(calls.length, 0);
 });
 
@@ -151,7 +156,12 @@ test('surfaces quota errors instead of showing an empty success result', async (
   const { fetcher } = fixture(() => Response.json({
     error: { errors: [{ reason: 'quotaExceeded' }] },
   }, { status: 403 }));
-  await assert.rejects(createYouTubeService({ apiKey: 'test-key', fetcher }).search('노래'), rejectsCode('QUOTA_EXCEEDED'));
+  await assert.rejects(createYouTubeService({ apiKey: 'test-key', fetcher }).search('노래'), (error: unknown) => {
+    assert.ok(error instanceof SearchError);
+    assert.equal(error.code, 'QUOTA_EXCEEDED');
+    assert.equal(error.message, '오늘의 YouTube 검색 한도를 모두 사용했어요. 한도가 초기화된 후 다시 검색해 주세요.');
+    return true;
+  });
 });
 
 test('surfaces network failures and never returns credentials in the error', async () => {

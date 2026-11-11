@@ -3,7 +3,6 @@ import { ArrowRight, Clock3, LoaderCircle, MicVocal, Music2, Search } from 'luci
 import { getSearchSuggestions, type SearchSuggestion } from './lib/suggestions.js';
 
 interface SearchFormProps {
-  mode: 'search' | 'link';
   value: string;
   searching: boolean;
   recentSearches: string[];
@@ -12,14 +11,14 @@ interface SearchFormProps {
   onSubmit(value: string): void;
 }
 
-export default function SearchForm({ mode, value, searching, recentSearches, inputRef, onChange, onSubmit }: SearchFormProps) {
+export default function SearchForm({ value, searching, recentSearches, inputRef, onChange, onSubmit }: SearchFormProps) {
   const root = useRef<HTMLDivElement>(null);
   const composing = useRef(false);
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
-  const suggestions = mode === 'search' ? getSearchSuggestions(value, recentSearches) : [];
-  const visible = mode === 'search' && open && Boolean(value.trim());
+  const suggestions = getSearchSuggestions(value, recentSearches);
+  const visible = open && Boolean(value.trim());
   const activeOption = visible && active >= 0 ? suggestions[active] : undefined;
 
   function dismiss() {
@@ -60,7 +59,7 @@ export default function SearchForm({ mode, value, searching, recentSearches, inp
       dismiss();
       return;
     }
-    if (mode !== 'search' || !value.trim()) return;
+    if (!value.trim()) return;
     if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && suggestions.length) {
       event.preventDefault();
       setOpen(true);
@@ -83,7 +82,7 @@ export default function SearchForm({ mode, value, searching, recentSearches, inp
         dismiss();
         onSubmit(value);
       }}>
-        <label className="sr-only" htmlFor="song-search">{mode === 'search' ? '곡 제목 또는 가수' : 'YouTube 영상 링크'}</label>
+        <label className="sr-only" htmlFor="song-search">곡 제목 또는 가수</label>
         <Search size={21} className="search-field-icon" />
         <input ref={inputRef} id="song-search" value={value}
           onChange={(event) => { onChange(event.target.value); setActive(-1); setOpen(true); }}
@@ -91,20 +90,20 @@ export default function SearchForm({ mode, value, searching, recentSearches, inp
           onKeyDown={keyDown}
           onCompositionStart={() => { composing.current = true; }}
           onCompositionEnd={() => { composing.current = false; }}
-          role={mode === 'search' ? 'combobox' : undefined}
-          aria-autocomplete={mode === 'search' ? 'list' : undefined}
-          aria-expanded={mode === 'search' ? visible : undefined}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={visible}
           aria-controls={visible ? listId : undefined}
           aria-activedescendant={activeOption ? `${listId}-${active}` : undefined}
-          aria-describedby={mode === 'search' ? `${listId}-help` : undefined}
-          placeholder={mode === 'search' ? '곡 제목이나 가수를 검색해 보세요' : 'YouTube 영상 링크를 붙여 넣으세요'}
-          maxLength={mode === 'search' ? 100 : 2048} autoComplete="off" autoCapitalize="none" spellCheck={false}
-          enterKeyHint={mode === 'search' ? 'search' : 'go'} />
-        <button className="search-submit" type="submit" disabled={searching} aria-label={mode === 'search' ? '검색' : '링크 재생'}>
+          aria-describedby={`${listId}-help`}
+          placeholder="곡 제목이나 가수를 검색해 보세요"
+          maxLength={100} autoComplete="off" autoCapitalize="none" spellCheck={false}
+          enterKeyHint="search" />
+        <button className="search-submit" type="submit" disabled={searching} aria-label="검색">
           {searching ? <LoaderCircle className="spin" size={20} /> : <ArrowRight size={21} />}
         </button>
       </form>
-      {mode === 'search' && <span className="sr-only" id={`${listId}-help`}>방향키로 추천을 고르고 Enter로 검색하거나, 검색어를 직접 입력하고 Enter를 누르세요. Escape로 추천을 닫을 수 있습니다.</span>}
+      <span className="sr-only" id={`${listId}-help`}>방향키로 추천을 고르고 Enter로 검색하거나, 검색어를 직접 입력하고 Enter를 누르세요. Escape로 추천을 닫을 수 있습니다.</span>
       {visible && (
         <div className="autocomplete-panel">
           <div className="autocomplete-heading">검색어 추천 <span>입력 중 API 사용 없음</span></div>

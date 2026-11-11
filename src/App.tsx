@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowDown, ArrowRight, AudioLines, Check, ChevronRight, CircleHelp,
-  ExternalLink, Headphones, Link, ListMusic, LoaderCircle, Maximize2,
+  ExternalLink, Headphones, ListMusic, LoaderCircle, Maximize2,
   MicVocal, Music2, Play, Plus, Search, ShieldCheck, SkipForward, Sparkles, X,
 } from 'lucide-react';
 import Player, { type PlayerHandle } from './Player.js';
 import SearchForm from './SearchForm.js';
-import { appendToQueue, displayTitle, songFromUrl } from './lib/songs.js';
+import { appendToQueue, displayTitle } from './lib/songs.js';
 import { rememberSearch } from './lib/suggestions.js';
 import type { ApiError, AppConfig, Provider, SearchResults, Song } from './types.js';
 
@@ -15,6 +15,18 @@ const providerName: Record<Provider, string> = { tj: 'TJ', ky: '금영', other: 
 
 function ProviderBadge({ provider }: { provider: Provider }) {
   return <span className={`provider-badge ${provider}`}>{providerName[provider]}</span>;
+}
+
+function NextUp({ song, onNext }: { song?: Song; onNext(): void }) {
+  return (
+    <div className="next-up">
+      <span className="next-up-label"><SkipForward size={14} /> 다음 곡</span>
+      <div className="next-up-song" role="status" aria-label="다음 예약곡" aria-live="polite" aria-atomic="true">{song
+        ? <><ProviderBadge provider={song.provider} /><strong title={displayTitle(song.title)}>{displayTitle(song.title)}</strong></>
+        : <span>예약곡이 없어요</span>}</div>
+      <button className="next-button" onClick={onNext} disabled={!song} aria-label="다음 예약곡 재생" title="다음 예약곡"><SkipForward size={20} /></button>
+    </div>
+  );
 }
 
 function SongRow({ song, playing, queued, onPlay, onQueue }: {
@@ -44,8 +56,6 @@ function SongRow({ song, playing, queued, onPlay, onQueue }: {
 
 export default function App() {
   const [query, setQuery] = useState('');
-  const [link, setLink] = useState('');
-  const [mode, setMode] = useState<'search' | 'link'>('search');
   const [filter, setFilter] = useState<'all' | 'tj' | 'ky'>('all');
   const [lastQuery, setLastQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -108,7 +118,7 @@ export default function App() {
   }, [privacyOpen]);
 
   useEffect(() => {
-    if (!current) return;
+    if (!current || window.matchMedia('(orientation: landscape) and (min-width: 560px)').matches) return;
     stage.current?.scrollIntoView({
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
       block: 'start',
@@ -189,21 +199,6 @@ export default function App() {
     else setNotice('마지막 곡이에요. 다음에 부를 곡을 예약해 보세요.');
   }
 
-  function submit(value: string) {
-    if (mode === 'search') {
-      void searchSongs(value);
-      return;
-    }
-    if (!canConnect()) return;
-    const song = songFromUrl(value);
-    if (!song) {
-      setSearchError('올바른 YouTube 영상 링크를 입력해 주세요. 재생목록 링크만으로는 재생할 수 없어요.');
-      return;
-    }
-    setSearchError('');
-    playSong(song);
-  }
-
   async function fullscreen() {
     try {
       if (!stage.current?.requestFullscreen) {
@@ -222,6 +217,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <div className="landscape-topbar"><NextUp song={nextSong} onNext={playNext} /></div>
       <header className="site-header">
         <a className="brand" href="/" aria-label="norae. 홈"><span className="brand-icon"><AudioLines size={23} /></span>norae<span className="brand-dot">.</span></a>
         <span className="header-caption">나만의 작은 노래방</span>
@@ -248,13 +244,7 @@ export default function App() {
         <div className={`workspace ${current ? 'is-playing' : ''}`}>
           <section className="stage-card" ref={stage} aria-label="노래 재생">
             <div className="panel-heading"><span className="eyebrow"><span className={`live-dot ${current ? '' : 'muted'}`} /> NOW PLAYING</span><button className="icon-button" aria-label="플레이어 크게 보기" title="크게 보기" disabled={!current} onClick={() => void fullscreen()}><Maximize2 size={16} /></button></div>
-            <div className="next-up">
-              <span className="next-up-label"><SkipForward size={14} /> 다음 곡</span>
-              <div className="next-up-song" role="status" aria-label="다음 예약곡" aria-live="polite" aria-atomic="true">{nextSong
-                ? <><ProviderBadge provider={nextSong.provider} /><strong title={displayTitle(nextSong.title)}>{displayTitle(nextSong.title)}</strong></>
-                : <span>예약곡이 없어요</span>}</div>
-              <button className="next-button" onClick={playNext} disabled={!queue.length} aria-label="다음 예약곡 재생" title="다음 예약곡"><SkipForward size={20} /></button>
-            </div>
+            <NextUp song={nextSong} onNext={playNext} />
             {current ? <Player ref={player} song={current} onEnded={playNext} /> : <div className="empty-stage"><div className="stage-rings"><MicVocal size={33} strokeWidth={1.5} /></div><strong>무대가 준비됐어요</strong><p>노래를 선택하면 여기에 재생돼요</p><div className="equalizer" aria-hidden="true">{Array.from({ length: 19 }, (_, i) => <span key={i} style={{ height: `${8 + ((i * 13 + 7) % 25)}px` }} />)}</div></div>}
             <div className="now-playing-info">
               <div><span className="track-caption">{current ? '지금 부르는 곡' : '오늘의 주인공은 당신'}</span><h2>{current ? displayTitle(current.title) : '첫 소절을 시작해 볼까요?'}</h2><p>{current ? current.channelTitle : '좋아하는 노래 한 곡이면 충분해요.'}</p></div>
@@ -262,16 +252,13 @@ export default function App() {
             <div className="stage-footnote"><Music2 size={13} />가사와 반주는 YouTube 원본 영상으로 제공돼요</div>
           </section>
 
+          <div className="library-column">
           <section className="discovery" aria-label="노래 검색">
             <div className="search-card">
-              <div className="search-tabs" aria-label="검색 방식">
-                <button className={mode === 'search' ? 'active' : ''} onClick={() => { setMode('search'); setSearchError(''); }}><Search size={16} /> 노래 검색</button>
-                <button className={mode === 'link' ? 'active' : ''} onClick={() => { setMode('link'); setSearchError(''); }}><Link size={16} /> YouTube 링크</button>
-              </div>
-              <SearchForm mode={mode} value={mode === 'search' ? query : link} inputRef={searchInput}
+              <SearchForm value={query} inputRef={searchInput}
                 searching={searching} recentSearches={recentSearches}
-                onChange={mode === 'search' ? setQuery : setLink} onSubmit={submit} />
-              <div className="search-hint"><ShieldCheck size={14} />{mode === 'search' ? '금영 반주를 먼저, TJ와 다른 MR도 찾아드려요' : '검색 API 키 없이도 영상 링크로 바로 재생할 수 있어요'}</div>
+                onChange={setQuery} onSubmit={(value) => void searchSongs(value)} />
+              <div className="search-hint"><ShieldCheck size={14} />금영 반주를 먼저, TJ와 다른 MR도 찾아드려요</div>
             </div>
 
             {consentReady && !consent && (
@@ -285,14 +272,13 @@ export default function App() {
             {(configured === false || configError) && (
               <div className="status-banner"><CircleHelp size={17} /><div>{configError || (hosting === 'vercel'
                 ? <>Vercel의 Project Settings → Environment Variables에 <code>YOUTUBE_API_KEY</code>를 등록하고 다시 배포해 주세요.</>
-                : <>검색을 연결하려면 서버의 <code>.env</code>에 <code>YOUTUBE_API_KEY</code>를 설정해 주세요.</>)}
-                <button className="text-button" onClick={() => { setMode('link'); setSearchError(''); searchInput.current?.focus(); }}>YouTube 링크로 바로 재생 <ArrowRight size={13} /></button></div></div>
+                : <>검색을 연결하려면 서버의 <code>.env</code>에 <code>YOUTUBE_API_KEY</code>를 설정해 주세요.</>)}</div></div>
             )}
             {searchError && <div className="error-banner" role="alert"><CircleHelp size={18} /><span>{searchError}</span></div>}
 
             {!results && !searching && (
               <>
-                <div className="suggestions"><span>이런 곡은 어때요?</span><div>{suggestions.map((term) => <button key={term} onClick={() => { setQuery(term); setMode('search'); void searchSongs(term); }}>{term}<ChevronRight size={13} /></button>)}</div></div>
+                <div className="suggestions"><span>이런 곡은 어때요?</span><div>{suggestions.map((term) => <button key={term} onClick={() => { setQuery(term); void searchSongs(term); }}>{term}<ChevronRight size={13} /></button>)}</div></div>
                 <div className="section-heading"><h2>나만의 무대를 시작해요</h2><span>첫 곡부터, 앙코르까지</span></div>
                 <div className="start-card">
                   <div className="start-illustration" aria-hidden="true"><div className="record"><div><Music2 size={24} /></div></div><span className="record-spark">✦</span></div>
@@ -323,7 +309,7 @@ export default function App() {
                   <p className="alternative-note">다른 채널의 영상은 보컬 포함 여부와 반주 품질이 다를 수 있어요.</p>
                   {results.alternativesLoaded ? results.alternatives.length
                     ? results.alternatives.map((song) => <SongRow key={song.id} song={song} playing={current?.id === song.id} queued={queueIds.has(song.id)} onPlay={() => playSong(song)} onQueue={() => addToQueue(song)} />)
-                    : <div className="empty-results">다른 MR 후보도 찾지 못했어요. 검색어를 바꾸거나 YouTube 링크를 입력해 주세요.</div>
+                    : <div className="empty-results">다른 MR 후보도 찾지 못했어요. 다른 곡 제목이나 가수로 검색해 주세요.</div>
                     : <button className="outline-button" disabled={searching} onClick={() => void searchSongs(lastQuery, true)}>{searching ? <LoaderCircle size={15} className="spin" /> : <Search size={15} />} 다른 채널의 MR 검색</button>}
                 </div>
               </div>
@@ -339,6 +325,8 @@ export default function App() {
             </section>
             <div className="little-note"><Sparkles size={16} /><p>잘 부르지 않아도 괜찮아요.<br /><strong>좋아하는 노래니까, 그걸로 충분해요.</strong></p></div>
           </aside>
+          <div className="landscape-tools"><button className="text-button" onClick={() => setPrivacyOpen(true)}><CircleHelp size={13} /> 이용·개인정보 안내</button></div>
+          </div>
         </div>
       </main>
 

@@ -43,7 +43,7 @@ export function createYouTubeService({
       throw new SearchError(
         503,
         'NOT_CONFIGURED',
-        '노래 검색을 사용하려면 서버에 YouTube API 키를 설정해 주세요. YouTube 링크로 바로 재생은 사용할 수 있어요.',
+        '노래 검색을 사용하려면 서버에 YouTube API 키를 설정해 주세요.',
       );
     }
 
@@ -70,7 +70,7 @@ export function createYouTubeService({
     if (!response.ok) {
       const reason = data.error?.errors?.[0]?.reason;
       if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded') {
-        throw new SearchError(429, 'QUOTA_EXCEEDED', '오늘의 YouTube 검색 한도를 모두 사용했어요. YouTube 링크로 바로 재생해 주세요.');
+        throw new SearchError(429, 'QUOTA_EXCEEDED', '오늘의 YouTube 검색 한도를 모두 사용했어요. 한도가 초기화된 후 다시 검색해 주세요.');
       }
       if (response.status === 400 || response.status === 401 || response.status === 403) {
         throw new SearchError(502, 'API_CONFIGURATION', 'YouTube API 키 또는 API 사용 설정을 확인해 주세요.');

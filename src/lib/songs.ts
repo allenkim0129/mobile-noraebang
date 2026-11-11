@@ -20,30 +20,6 @@ export function displayTitle(title: string) {
     .trim();
 }
 
-export function songFromUrl(input: string): Song | null {
-  let url: URL;
-  try {
-    url = new URL(input.trim());
-  } catch {
-    return null;
-  }
-  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return null;
-  const host = url.hostname.toLowerCase();
-  const parts = url.pathname.split('/').filter(Boolean);
-  let id: string | null = null;
-  if (host === 'youtu.be') {
-    if (parts.length === 1) id = parts[0];
-  } else if (['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com'].includes(host)) {
-    if (url.pathname === '/watch') id = url.searchParams.get('v');
-    else if (parts.length === 2 && ['shorts', 'embed', 'live'].includes(parts[0])) id = parts[1];
-  } else if (['youtube-nocookie.com', 'www.youtube-nocookie.com'].includes(host)
-    && parts.length === 2 && parts[0] === 'embed') {
-    id = parts[1];
-  }
-  if (!id || !/^[\w-]{11}$/.test(id)) return null;
-  return { id, title: '직접 추가한 YouTube 영상', channelTitle: 'YouTube 링크', provider: 'other' };
-}
-
 export function appendToQueue(queue: Song[], song: Song): Song[] {
   return queue.some((item) => item.id === song.id) ? queue : [...queue, song];
 }
