@@ -1,9 +1,23 @@
+interface RecognitionResult {
+  isFinal: boolean;
+  0: { transcript: string };
+}
+
+export function recognitionTranscript(results: ArrayLike<RecognitionResult>) {
+  const items = Array.from(results);
+  const text = items.map((item) => item[0].transcript.trim()).filter(Boolean).join(' ');
+  return { text, isFinal: items.length > 0 && items.every((item) => item.isFinal) };
+}
+
 export interface Recognition {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   maxAlternatives: number;
-  onresult: ((event: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
+  onstart: (() => void) | null;
+  onaudiostart: (() => void) | null;
+  onspeechstart: (() => void) | null;
+  onresult: ((event: { results: ArrayLike<RecognitionResult> }) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
   start(): void;

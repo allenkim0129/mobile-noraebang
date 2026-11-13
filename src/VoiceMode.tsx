@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Square, Volume2 } from 'lucide-react';
 import { displayTitle, providerName } from './lib/songs.js';
-import { recognitionConstructor, recognitionError, type Recognition } from './lib/speech.js';
+import { recognitionConstructor, recognitionError, recognitionTranscript, type Recognition } from './lib/speech.js';
 import { automaticVoiceSong, parseVoiceChoice, parseVoiceConfirmation, parseVoiceQuery, voiceCandidates } from './lib/voice.js';
 import type { ApiError, SearchResults, Song } from './types.js';
 
@@ -24,6 +24,7 @@ export default function VoiceMode({ consent, configured, configError, issue, pla
   const [phase, setPhase] = useState<Phase>('idle');
   const [message, setMessage] = useState('“아이유의 밤편지 찾아줘”처럼 말해 주세요.');
   const [transcript, setTranscript] = useState('');
+  const [transcriptFinal, setTranscriptFinal] = useState(false);
   const [candidates, setCandidates] = useState<Song[]>([]);
   const [page, setPage] = useState(0);
   const [pendingSong, setPendingSong] = useState<Song | null>(null);
@@ -45,6 +46,9 @@ export default function VoiceMode({ consent, configured, configError, issue, pla
     const active = recognition.current;
     recognition.current = null;
     if (active) {
+      active.onstart = null;
+      active.onaudiostart = null;
+      active.onspeechstart = null;
       active.onresult = null;
       active.onerror = null;
       active.onend = null;
@@ -177,19 +181,31 @@ export default function VoiceMode({ consent, configured, configError, issue, pla
     recognition.current = active;
     active.lang = 'ko-KR';
     active.continuous = false;
-    active.interimResults = false;
+    active.interimResults = true;
     active.maxAlternatives = 1;
+    setTranscript('');
+    setTranscriptFinal(false);
     setPhase('listening');
-    setMessage(kind === 'search' ? '듣고 있어요. 가수와 곡명을 말해 주세요.'
+    setMessage('음성 인식을 시작하고 있어요. 마이크 연결을 기다려 주세요.');
+    const instruction = kind === 'search' ? '가수와 곡명을 말해 주세요.'
       : kind === 'confirm' ? '재생할까요? “재생해” 또는 “취소”라고 말해 주세요.'
-        : '듣고 있어요. 후보 번호 또는 취소라고 말해 주세요.');
+        : '후보 번호 또는 취소라고 말해 주세요.';
+    active.onstart = () => {
+      if (token === generation.current) setMessage(`음성 인식이 시작됐어요. ${instruction}`);
+    };
+    active.onaudiostart = () => {
+      if (token === generation.current) setMessage(`마이크가 연결됐어요. ${instruction}`);
+    };
+    active.onspeechstart = () => {
+      if (token === generation.current) setMessage(`음성이 감지됐어요. ${instruction}`);
+    };
     active.onresult = (event) => {
       if (token !== generation.current) return;
-      const result = Array.from(event.results).find((item) => item.isFinal);
-      if (!result) return;
-      const text = result[0].transcript.trim();
-      invalidate();
+      const { text, isFinal } = recognitionTranscript(event.results);
       setTranscript(text);
+      setTranscriptFinal(isFinal && Boolean(text));
+      if (!isFinal || !text) return;
+      invalidate();
       const choice = parseVoiceChoice(text);
       if (choice.type === 'cancel') { cancel(); return; }
       if (kind === 'search') {
@@ -274,13 +290,17 @@ export default function VoiceMode({ consent, configured, configError, issue, pla
   return (
     <section className="voice-panel" aria-label="한 곡 음성 검색">
       <p className={`voice-status ${phase}`} role={phase === 'error' ? 'alert' : 'status'} aria-live="polite" title={message}>{message}</p>
+      {(phase === 'listening' || phase === 'error' || (transcript && phase !== 'playback')) && <div className="voice-live" role="status" aria-live="polite" aria-atomic="true">
+        <span className="voice-live-label">{transcriptFinal ? '인식한 말' : phase === 'listening' ? '실시간 인식 · 아직 미확정' : '마지막 인식 · 미확정'}</span>
+        <p className="voice-live-text">{transcript || (phase === 'listening' ? '아직 인식된 말이 없어요. 말하면 이곳에 표시됩니다.' : '인식된 말이 없어요.')}</p>
+        {phase === 'error' && !transcriptFinal && <p className="voice-live-hint">확정된 문장을 받지 못해 실행하지 않았어요. 정차 후 마이크 권한·네트워크·블루투스 연결을 확인하고 다시 말해 주세요.</p>}
+      </div>}
       <div className="voice-actions">
         <button className="voice-listen" disabled={!enabled || busy} onClick={() => {
           if (pendingSong) listen('confirm');
           else if (candidates.length) listen('choice');
           else {
             setPage(0);
-            setTranscript('');
             listen('search', [], 0);
           }
         }}><Mic size={22} />{phase === 'listening' ? '듣는 중' : '말하기'}</button>
